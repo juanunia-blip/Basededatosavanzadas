@@ -1,105 +1,112 @@
-import React, { useContext, useState } from "react"
-import axios from "axios"
+import React, { createContext, useContext, useState } from "react";
+import axios from "axios";
 
 const BASE_URL = "http://localhost:5000/api/v1/";
 
-const GlobalContext = React.createContext()
+const GlobalContext = createContext();
 
-export const GlobalProvider = ({children}) => {
+export const GlobalProvider = ({ children }) => {
+  const [incomes, setIncomes] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [error, setError] = useState(null);
 
-    const [incomes, setIncomes] = useState([])
-    const [expenses, setExpenses] = useState([])
-    const [error, setError] = useState(null)
+  const addIncome = async (income) => {
+    try {
+      const response = await axios.post(`${BASE_URL}add-income`, income);
+      getIncomes();
+      return response.data;
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Error al agregar ingreso");
+    }
+  };
 
-    // calculate incomes
-    const addIncome = async (income) => {
-        const response = await axios.post(`${BASE_URL}add-income`, income)
-            .catch((err) => {
-                setError(err.response.data.message)
-            })
-            getIncomes()
+  const getIncomes = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}get-incomes`);
+      setIncomes(response.data);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Error al obtener ingresos");
     }
+  };
 
-    const getIncomes = async () => {
-        const response = await axios.get(` ${BASE_URL}get-incomes`)
-        setIncomes(response.data)
-        console.log(response.data)
+  const deleteIncome = async (id) => {
+    try {
+      await axios.delete(`${BASE_URL}delete-income/${id}`);
+      getIncomes();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Error al eliminar ingreso");
     }
-    
-    const deleteIncome = async (id) => {
-        const res = await axios.delete(`${BASE_URL}delete-income/${id}`)
-        getIncomes()
-    }
+  };
 
-    const totalIncome = () => {
-        let totalIncome = 0;
-        incomes.forEach((incomes) => {
-            totalIncome = totalIncome + incomes.amount 
-        })
-        return totalIncome;
+  const addExpense = async (expense) => {
+    try {
+      const response = await axios.post(`${BASE_URL}add-expense`, expense);
+      getExpenses();
+      return response.data;
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Error al agregar gasto");
     }
-    // calculate expenses
-    const addExpense = async (income) => {
-        const response = await axios.post(`${BASE_URL}add-expense`, income)
-            .catch((err) => {
-                setError(err.response.data.message)
-            })
-            getExpenses()
-    }
+  };
 
-    const getExpenses = async () => {
-        const response = await axios.get(` ${BASE_URL}get-expenses`)
-        setExpenses(response.data)
-        console.log(response.data)
+  const getExpenses = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}get-expenses`);
+      setExpenses(response.data);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Error al obtener gastos");
     }
-    
-    const deleteExpense = async (id) => {
-        const res = await axios.delete(`${BASE_URL}delete-expense/${id}`)
-        getExpenses()
-    }
+  };
 
-    const totalExpenses = () => {
-        let totalIncome = 0;
-        expenses.forEach((incomes) => {
-            totalIncome = totalIncome + incomes.amount 
-        })
-        return totalIncome;
+  const deleteExpense = async (id) => {
+    try {
+      await axios.delete(`${BASE_URL}delete-expense/${id}`);
+      getExpenses();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.message || "Error al eliminar gasto");
     }
+  };
 
-    const totalBalance = () =>{
-        return totalIncome() - totalExpenses()
-    }
-    
-    const transactionHistory = () => {
-        const history = [...incomes, ...expenses]
-        history.sort((a,b)=> {
-            return new Date(b.createdAt) - new Date(a.createdAt)
-        })
-        return history.slice(0,3)
-    }
-    // console.log(totalIncome());
-    return (
-        <GlobalContext.Provider value={{
-            addIncome,
-            getIncomes,
-            incomes,
-            deleteIncome,
-            totalIncome,
-            addExpense,
-            getExpenses,
-            deleteExpense,
-            totalExpenses,
-            expenses,
-            totalBalance,
-            transactionHistory,
-            error,
-            setError
-        }}>
-            {children}
-        </GlobalContext.Provider>
-    )
-}
+  const totalIncome = () => {
+    return incomes.reduce((acc, item) => acc + Number(item.monto || 0), 0);
+  };
+
+  const totalExpense = () => {
+    return expenses.reduce((acc, item) => acc + Number(item.monto || 0), 0);
+  };
+
+  const totalBalance = () => {
+    return totalIncome() - totalExpense();
+  };
+
+  return (
+    <GlobalContext.Provider
+      value={{
+        addIncome,
+        getIncomes,
+        deleteIncome,
+        incomes,
+        addExpense,
+        getExpenses,
+        deleteExpense,
+        expenses,
+        totalIncome,
+        totalExpense,
+        totalBalance,
+        error,
+        setError,
+      }}
+    >
+      {children}
+    </GlobalContext.Provider>
+  );
+};
 
 export const useGlobalContext = () => {
-    return useContext(GlobalContext)
-}
+  return useContext(GlobalContext);
+};

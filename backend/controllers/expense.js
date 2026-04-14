@@ -1,49 +1,88 @@
-const ExpenseSchema = require("../models/ExpenseModel")
+const Gasto = require('../models/ExpenseModel');
 
+const addExpense = async (req, res) => {
+  try {
+    const { gasto_id, usuario_id, categoria_id, monto, descripcion, fecha } = req.body;
 
-exports.addExpense = async (req,res) => {
-    const {title, amount, category, description, date} = req.body
-
-    const income = ExpenseSchema({
-        title,
-        amount,
-        category,
-        description,
-        date
-    })
-
-    try {
-        //validation
-        if (!title || !category || !description || !date){
-            return res.status(400).json({message: 'All fields are Required!'})
-        }
-        if (amount<=0 || !amount==='number'){
-            return res.status(400).json({message: 'Amount must be a positive number'})
-        }
-        await income.save()
-        res.status(200).json({message: 'Expense Added'})
-    } catch (error) {
-        res.status(500).json({message: 'Server Error'})
+    if (!gasto_id || !usuario_id || !categoria_id || !descripcion || !fecha) {
+      return res.status(400).json({ message: 'Todos los campos son obligatorios' });
     }
 
-    console.log(income)
-}
-
-exports.getExpense = async (req, res) => {
-    try {
-        const incomes = await ExpenseSchema.find().sort({createdAt: -1})
-        res.status(200).json(incomes)
-    } catch (error) {
-        res.status(500).json({message: 'Server Error'})
+    if (typeof monto !== 'number' || monto <= 0) {
+      return res.status(400).json({ message: 'El monto debe ser mayor que cero' });
     }
-}
-exports.deleteExpense = async (req, res) => {
-    const {id} = req.params;
-    ExpenseSchema.findByIdAndDelete(id)
-        .then((income) => {
-            res.status(200).json({message: 'Expense Deleted'})
-        })
-        .catch((err) => {
-            res.status(500).json({message: 'Server Error'})
-        })
-}
+
+    const exists = await Gasto.findOne({ gasto_id });
+    if (exists) {
+      return res.status(400).json({ message: 'El gasto_id ya existe' });
+    }
+
+    const gasto = new Gasto({
+      gasto_id,
+      usuario_id,
+      categoria_id,
+      monto,
+      descripcion,
+      fecha
+    });
+
+    await gasto.save();
+
+    res.status(201).json({ message: 'Gasto creado correctamente', data: gasto });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al crear gasto', error: error.message });
+  }
+};
+
+const getExpenses = async (req, res) => {
+  try {
+    const filtros = {};
+    if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
+    if (req.query.categoria_id) filtros.categoria_id = req.query.categoria_id;
+
+    const gastos = await Gasto.find(filtros).sort({ fecha: -1 });
+
+    res.status(200).json(gastos);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener gastos', error: error.message });
+  }
+};
+
+const updateExpense = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const gasto = await Gasto.findByIdAndUpdate(id, req.body, { new: true });
+
+    if (!gasto) {
+      return res.status(404).json({ message: 'Gasto no encontrado' });
+    }
+
+    res.status(200).json({ message: 'Gasto actualizado', data: gasto });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar gasto', error: error.message });
+  }
+};
+
+const deleteExpense = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const gasto = await Gasto.findByIdAndDelete(id);
+
+    if (!gasto) {
+      return res.status(404).json({ message: 'Gasto no encontrado' });
+    }
+
+    res.status(200).json({ message: 'Gasto eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar gasto', error: error.message });
+  }
+};
+
+module.exports = {
+  addExpense,
+  getExpenses,
+  updateExpense,
+  deleteExpense
+};
