@@ -2,7 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { db } = require('./db/db');
+
 const transactionRoutes = require('./routes/transactions');
+const userRoutes = require('./routes/user');
+const categoryRoutes = require('./routes/category');
+const budgetRoutes = require('./routes/budget');
+const savingRoutes = require('./routes/saving');
 
 dotenv.config();
 
@@ -14,6 +19,10 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/v1', transactionRoutes);
+app.use('/api/v1', userRoutes);
+app.use('/api/v1', categoryRoutes);
+app.use('/api/v1', budgetRoutes);
+app.use('/api/v1', savingRoutes);
 
 const PORT = process.env.PORT || 5000;
 

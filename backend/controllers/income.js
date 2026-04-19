@@ -40,7 +40,6 @@ const getIncomes = async (req, res) => {
     if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
 
     const ingresos = await Ingreso.find(filtros).sort({ fecha: -1 });
-
     res.status(200).json(ingresos);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener ingresos', error: error.message });
@@ -57,7 +56,7 @@ const updateIncome = async (req, res) => {
       return res.status(404).json({ message: 'Ingreso no encontrado' });
     }
 
-    res.status(200).json({ message: 'Ingreso actualizado', data: ingreso });
+    res.status(200).json({ message: 'Ingreso actualizado correctamente', data: ingreso });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar ingreso', error: error.message });
   }

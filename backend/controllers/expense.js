@@ -41,7 +41,6 @@ const getExpenses = async (req, res) => {
     if (req.query.categoria_id) filtros.categoria_id = req.query.categoria_id;
 
     const gastos = await Gasto.find(filtros).sort({ fecha: -1 });
-
     res.status(200).json(gastos);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener gastos', error: error.message });
@@ -58,7 +57,7 @@ const updateExpense = async (req, res) => {
       return res.status(404).json({ message: 'Gasto no encontrado' });
     }
 
-    res.status(200).json({ message: 'Gasto actualizado', data: gasto });
+    res.status(200).json({ message: 'Gasto actualizado correctamente', data: gasto });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar gasto', error: error.message });
   }
