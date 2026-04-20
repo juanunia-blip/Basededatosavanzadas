@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState } from "react";
 import axios from "axios";
 
 const BASE_URL = "http://localhost:5000/api/v1/";
-
 const GlobalContext = createContext();
 
 export const GlobalProvider = ({ children }) => {
@@ -12,11 +11,9 @@ export const GlobalProvider = ({ children }) => {
 
   const addIncome = async (income) => {
     try {
-      const response = await axios.post(`${BASE_URL}add-income`, income);
+      await axios.post(`${BASE_URL}add-income`, income);
       getIncomes();
-      return response.data;
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Error al agregar ingreso");
     }
   };
@@ -26,7 +23,6 @@ export const GlobalProvider = ({ children }) => {
       const response = await axios.get(`${BASE_URL}get-incomes`);
       setIncomes(response.data);
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Error al obtener ingresos");
     }
   };
@@ -36,18 +32,15 @@ export const GlobalProvider = ({ children }) => {
       await axios.delete(`${BASE_URL}delete-income/${id}`);
       getIncomes();
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Error al eliminar ingreso");
     }
   };
 
   const addExpense = async (expense) => {
     try {
-      const response = await axios.post(`${BASE_URL}add-expense`, expense);
+      await axios.post(`${BASE_URL}add-expense`, expense);
       getExpenses();
-      return response.data;
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Error al agregar gasto");
     }
   };
@@ -57,7 +50,6 @@ export const GlobalProvider = ({ children }) => {
       const response = await axios.get(`${BASE_URL}get-expenses`);
       setExpenses(response.data);
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Error al obtener gastos");
     }
   };
@@ -67,39 +59,40 @@ export const GlobalProvider = ({ children }) => {
       await axios.delete(`${BASE_URL}delete-expense/${id}`);
       getExpenses();
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Error al eliminar gasto");
     }
   };
 
-  const totalIncome = () => {
-    return incomes.reduce((acc, item) => acc + Number(item.monto || 0), 0);
-  };
+  const totalIncome = () =>
+    incomes.reduce((acc, item) => acc + Number(item.monto || 0), 0);
 
-  const totalExpense = () => {
-    return expenses.reduce((acc, item) => acc + Number(item.monto || 0), 0);
-  };
+  const totalExpense = () =>
+    expenses.reduce((acc, item) => acc + Number(item.monto || 0), 0);
 
-  const totalBalance = () => {
-    return totalIncome() - totalExpense();
+  const totalBalance = () => totalIncome() - totalExpense();
+
+  const transactionHistory = () => {
+    const history = [...incomes, ...expenses];
+    history.sort((a, b) => new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha));
+    return history.slice(0, 3);
   };
 
   return (
     <GlobalContext.Provider
       value={{
+        incomes,
+        expenses,
+        error,
         addIncome,
         getIncomes,
         deleteIncome,
-        incomes,
         addExpense,
         getExpenses,
         deleteExpense,
-        expenses,
         totalIncome,
         totalExpense,
         totalBalance,
-        error,
-        setError,
+        transactionHistory,
       }}
     >
       {children}
@@ -107,6 +100,4 @@ export const GlobalProvider = ({ children }) => {
   );
 };
 
-export const useGlobalContext = () => {
-  return useContext(GlobalContext);
-};
+export const useGlobalContext = () => useContext(GlobalContext);
