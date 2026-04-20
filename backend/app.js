@@ -24,6 +24,10 @@ app.use('/api/v1', categoryRoutes);
 app.use('/api/v1', budgetRoutes);
 app.use('/api/v1', savingRoutes);
 
+app.use((req, res) => {
+  res.status(404).json({ message: 'Ruta no encontrada' });
+});
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

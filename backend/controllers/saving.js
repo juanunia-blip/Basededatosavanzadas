@@ -1,4 +1,5 @@
 const Ahorro = require('../models/SavingModel');
+const Usuario = require('../models/UserModel');
 
 const addSaving = async (req, res) => {
   try {
@@ -20,6 +21,11 @@ const addSaving = async (req, res) => {
       return res.status(400).json({ message: 'El ahorro_id ya existe' });
     }
 
+    const userExists = await Usuario.findOne({ usuario_id });
+    if (!userExists) {
+      return res.status(400).json({ message: 'Usuario no existe' });
+    }
+
     const ahorro = new Ahorro({
       ahorro_id,
       usuario_id,
@@ -39,9 +45,11 @@ const addSaving = async (req, res) => {
 const getSavings = async (req, res) => {
   try {
     const filtros = {};
+
     if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
 
     const ahorros = await Ahorro.find(filtros).sort({ createdAt: -1 });
+
     res.status(200).json(ahorros);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener ahorros', error: error.message });
@@ -80,9 +88,36 @@ const deleteSaving = async (req, res) => {
   }
 };
 
+const savingProgress = async (req, res) => {
+  try {
+    const { usuario_id } = req.query;
+
+    const filtros = {};
+    if (usuario_id) filtros.usuario_id = usuario_id;
+
+    const ahorros = await Ahorro.find(filtros);
+
+    const resultado = ahorros.map(item => ({
+      ahorro_id: item.ahorro_id,
+      usuario_id: item.usuario_id,
+      meta: item.meta,
+      monto_objetivo: item.monto_objetivo,
+      monto_actual: item.monto_actual,
+      porcentaje: item.monto_objetivo > 0
+        ? (item.monto_actual / item.monto_objetivo) * 100
+        : 0
+    }));
+
+    res.status(200).json(resultado);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener progreso de ahorro', error: error.message });
+  }
+};
+
 module.exports = {
   addSaving,
   getSavings,
   updateSaving,
-  deleteSaving
+  deleteSaving,
+  savingProgress
 };

@@ -1,4 +1,5 @@
 const Presupuesto = require('../models/BudgetModel');
+const Gasto = require('../models/ExpenseModel');
 
 const addBudget = async (req, res) => {
   try {
@@ -79,9 +80,88 @@ const deleteBudget = async (req, res) => {
   }
 };
 
+const checkBudgetStatus = async (req, res) => {
+  try {
+    const { usuario_id, categoria_id, mes } = req.query;
+
+    if (!usuario_id || !categoria_id || !mes) {
+      return res.status(400).json({ message: 'usuario_id, categoria_id y mes son obligatorios' });
+    }
+
+    const presupuesto = await Presupuesto.findOne({ usuario_id, categoria_id, mes });
+
+    if (!presupuesto) {
+      return res.status(404).json({ message: 'Presupuesto no encontrado' });
+    }
+
+    const meses = {
+      Enero: 0,
+      Febrero: 1,
+      Marzo: 2,
+      Abril: 3,
+      Mayo: 4,
+      Junio: 5,
+      Julio: 6,
+      Agosto: 7,
+      Septiembre: 8,
+      Octubre: 9,
+      Noviembre: 10,
+      Diciembre: 11
+    };
+
+    const monthIndex = meses[mes];
+    if (monthIndex === undefined) {
+      return res.status(400).json({ message: 'Mes inválido' });
+    }
+
+    const year = 2024;
+    const start = new Date(year, monthIndex, 1);
+    const end = new Date(year, monthIndex + 1, 1);
+
+    const gastos = await Gasto.aggregate([
+      {
+        $match: {
+          usuario_id,
+          categoria_id,
+          fecha: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total_gastado: { $sum: '$monto' }
+        }
+      }
+    ]);
+
+    const totalGastado = gastos[0]?.total_gastado || 0;
+    const porcentaje = presupuesto.limite > 0
+      ? (totalGastado / presupuesto.limite) * 100
+      : 0;
+
+    res.status(200).json({
+      usuario_id,
+      categoria_id,
+      mes,
+      limite: presupuesto.limite,
+      total_gastado: totalGastado,
+      porcentaje_usado: porcentaje,
+      estado:
+        porcentaje >= 100
+          ? 'Presupuesto excedido'
+          : porcentaje >= 80
+          ? 'Cerca del límite'
+          : 'Dentro del presupuesto'
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al verificar presupuesto', error: error.message });
+  }
+};
+
 module.exports = {
   addBudget,
   getBudgets,
   updateBudget,
-  deleteBudget
+  deleteBudget,
+  checkBudgetStatus
 };

@@ -1,4 +1,5 @@
 const Ingreso = require('../models/IncomeModel');
+const Usuario = require('../models/UserModel');
 
 const addIncome = async (req, res) => {
   try {
@@ -15,6 +16,11 @@ const addIncome = async (req, res) => {
     const exists = await Ingreso.findOne({ ingreso_id });
     if (exists) {
       return res.status(400).json({ message: 'El ingreso_id ya existe' });
+    }
+
+    const userExists = await Usuario.findOne({ usuario_id });
+    if (!userExists) {
+      return res.status(400).json({ message: 'Usuario no existe' });
     }
 
     const ingreso = new Ingreso({
@@ -37,9 +43,23 @@ const addIncome = async (req, res) => {
 const getIncomes = async (req, res) => {
   try {
     const filtros = {};
+
     if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
 
+    if (req.query.min || req.query.max) {
+      filtros.monto = {};
+      if (req.query.min) filtros.monto.$gte = Number(req.query.min);
+      if (req.query.max) filtros.monto.$lte = Number(req.query.max);
+    }
+
+    if (req.query.fecha_inicio || req.query.fecha_fin) {
+      filtros.fecha = {};
+      if (req.query.fecha_inicio) filtros.fecha.$gte = new Date(req.query.fecha_inicio);
+      if (req.query.fecha_fin) filtros.fecha.$lte = new Date(req.query.fecha_fin);
+    }
+
     const ingresos = await Ingreso.find(filtros).sort({ fecha: -1 });
+
     res.status(200).json(ingresos);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener ingresos', error: error.message });
@@ -56,7 +76,7 @@ const updateIncome = async (req, res) => {
       return res.status(404).json({ message: 'Ingreso no encontrado' });
     }
 
-    res.status(200).json({ message: 'Ingreso actualizado correctamente', data: ingreso });
+    res.status(200).json({ message: 'Ingreso actualizado', data: ingreso });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar ingreso', error: error.message });
   }
