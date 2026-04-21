@@ -8,7 +8,8 @@ const {
   totalByUser,
   averageByCategory,
   highExpenses,
-  generalReport
+  generalReport,
+  unusualExpenses
 } = require('../controllers/expense');
 
 const {
@@ -32,5 +33,6 @@ router.get('/report/total-by-user', totalByUser);
 router.get('/report/average-by-category', averageByCategory);
 router.get('/report/high-expenses', highExpenses);
 router.get('/report/general-expenses', generalReport);
+router.get('/unusual-expenses', unusualExpenses);
 
 module.exports = router;

@@ -8,6 +8,7 @@ const userRoutes = require('./routes/user');
 const categoryRoutes = require('./routes/category');
 const budgetRoutes = require('./routes/budget');
 const savingRoutes = require('./routes/saving');
+const reportRoutes = require('./routes/report');
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/api/v1', userRoutes);
 app.use('/api/v1', categoryRoutes);
 app.use('/api/v1', budgetRoutes);
 app.use('/api/v1', savingRoutes);
+app.use('/api/v1', reportRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });

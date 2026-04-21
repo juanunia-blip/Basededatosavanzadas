@@ -158,10 +158,101 @@ const checkBudgetStatus = async (req, res) => {
   }
 };
 
+const getBudgetAlerts = async (req, res) => {
+  try {
+    const { usuario_id, mes } = req.query;
+
+    if (!usuario_id || !mes) {
+      return res.status(400).json({ message: 'usuario_id y mes son obligatorios' });
+    }
+
+    const presupuestos = await Presupuesto.find({ usuario_id, mes });
+
+    if (!presupuestos.length) {
+      return res.status(200).json([]);
+    }
+
+    const meses = {
+      Enero: 0,
+      Febrero: 1,
+      Marzo: 2,
+      Abril: 3,
+      Mayo: 4,
+      Junio: 5,
+      Julio: 6,
+      Agosto: 7,
+      Septiembre: 8,
+      Octubre: 9,
+      Noviembre: 10,
+      Diciembre: 11
+    };
+
+    const monthIndex = meses[mes];
+    if (monthIndex === undefined) {
+      return res.status(400).json({ message: 'Mes inválido' });
+    }
+
+    const year = 2024;
+    const start = new Date(year, monthIndex, 1);
+    const end = new Date(year, monthIndex + 1, 1);
+
+    const alertas = [];
+
+    for (const presupuesto of presupuestos) {
+      const gastos = await Gasto.aggregate([
+        {
+          $match: {
+            usuario_id: presupuesto.usuario_id,
+            categoria_id: presupuesto.categoria_id,
+            fecha: { $gte: start, $lt: end }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total_gastado: { $sum: '$monto' }
+          }
+        }
+      ]);
+
+      const totalGastado = gastos[0]?.total_gastado || 0;
+      const porcentaje = presupuesto.limite > 0
+        ? (totalGastado / presupuesto.limite) * 100
+        : 0;
+
+      let nivel = 'ok';
+      let mensaje = 'Presupuesto en buen estado';
+
+      if (porcentaje >= 100) {
+        nivel = 'danger';
+        mensaje = `Has excedido el presupuesto de ${presupuesto.categoria_id}`;
+      } else if (porcentaje >= 80) {
+        nivel = 'warning';
+        mensaje = `Estás cerca del límite en ${presupuesto.categoria_id}`;
+      }
+
+      alertas.push({
+        presupuesto_id: presupuesto.presupuesto_id,
+        categoria_id: presupuesto.categoria_id,
+        limite: presupuesto.limite,
+        total_gastado: totalGastado,
+        porcentaje_usado: Number(porcentaje.toFixed(2)),
+        nivel,
+        mensaje
+      });
+    }
+
+    res.status(200).json(alertas);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener alertas', error: error.message });
+  }
+};
+
 module.exports = {
   addBudget,
   getBudgets,
   updateBudget,
   deleteBudget,
-  checkBudgetStatus
+  checkBudgetStatus,
+  getBudgetAlerts
 };

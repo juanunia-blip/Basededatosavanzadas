@@ -167,6 +167,40 @@ const generalReport = async (req, res) => {
   }
 };
 
+const unusualExpenses = async (req, res) => {
+  try {
+    const { usuario_id } = req.query;
+
+    if (!usuario_id) {
+      return res.status(400).json({ message: 'usuario_id es obligatorio' });
+    }
+
+    const promedio = await Gasto.aggregate([
+      { $match: { usuario_id } },
+      {
+        $group: {
+          _id: null,
+          avg: { $avg: '$monto' }
+        }
+      }
+    ]);
+
+    const avg = promedio[0]?.avg || 0;
+
+    const gastosAltos = await Gasto.find({
+      usuario_id,
+      monto: { $gt: avg * 2 }
+    }).sort({ monto: -1 });
+
+    res.status(200).json({
+      promedio: Number(avg.toFixed(2)),
+      gastos_inusuales: gastosAltos
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener gastos inusuales', error: error.message });
+  }
+};
+
 module.exports = {
   addExpense,
   getExpenses,
@@ -175,5 +209,6 @@ module.exports = {
   totalByUser,
   averageByCategory,
   highExpenses,
-  generalReport
+  generalReport,
+  unusualExpenses
 };

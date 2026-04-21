@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect } from 'react';
 import styled from 'styled-components';
 import { InnerLayout } from '../../styles/Layout';
 import { useGlobalContext } from '../../context/globalContext';
@@ -6,46 +6,71 @@ import Form from '../Form/Form';
 import IncomeItem from '../IncomeItem/IncomeItem';
 
 function Incomes() {
-  const { incomes, getIncomes, deleteIncome, totalIncome} = useGlobalContext()
+  const {
+    incomes,
+    getIncomes,
+    deleteIncome,
+    totalIncome,
+    setEditingIncome
+  } = useGlobalContext();
 
   useEffect(() => {
-      getIncomes()
-  },[])
+    getIncomes();
+  }, []);
+
   return (
     <IncomesStyled>
-        <InnerLayout>
-            <h1>Ingresos</h1>
-            <h2 className='total-income'> Total Ingresos : <span>${totalIncome()} </span> </h2>
-            <div className="income-content">
-                <div className="form-container">
-                  <Form/>
-                </div>
-                <div className="incomes">
-                    {incomes.map((income) => {
-                        const {_id, title, amount, date, category, description,type} = income;
-                        return <IncomeItem
-                        key={_id}
-                        id={_id} 
-                        title={title} 
-                        description={description} 
-                        amount={amount} 
-                        date={date} 
-                        type={type}
-                        category={category} 
-                        indicatorColor="var(--color-green)"
-                        deleteItem={deleteIncome}
-                        
-                        />
-                    })}
-                </div>
-            </div>
-        </InnerLayout>
+      <InnerLayout>
+        <h1>Ingresos</h1>
+
+        <h2 className='total-income'>
+          Ingresos totales: <span>$ {totalIncome()}</span>
+        </h2>
+
+        <div className="income-content">
+          <div className="form-container">
+            <Form />
+          </div>
+
+          <div className="incomes">
+            {incomes.map((income) => {
+              const { _id, descripcion, monto, fecha, fuente, ingreso_id, usuario_id } = income;
+
+              return (
+                <IncomeItem
+                  key={_id}
+                  id={_id}
+                  title={fuente}
+                  description={descripcion}
+                  amount={monto}
+                  date={fecha}
+                  type="income"
+                  category={fuente}
+                  indicatorColor="var(--color-green)"
+                  deleteItem={deleteIncome}
+                  editItem={() => setEditingIncome({
+                    _id,
+                    ingreso_id,
+                    usuario_id,
+                    fuente,
+                    monto,
+                    descripcion,
+                    fecha
+                  })}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </InnerLayout>
     </IncomesStyled>
-  )
+  );
 }
+
 const IncomesStyled = styled.div`
   display: flex;
   overflow: auto;
+
   .total-income{
     display: flex;
     justify-content: center;
@@ -58,18 +83,26 @@ const IncomesStyled = styled.div`
     margin: 1rem 0;
     font-size: 2rem;
     gap: .5rem;
+
     span{
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: var(--color-green);
-      }
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--color-green);
+    }
   }
+
   .income-content{
     display:flex;
     gap:2rem;
+
+    .form-container{
+      flex: 0 0 420px;
+    }
+
     .incomes{
       flex:1;
     }
   }
 `;
-export default Incomes
+
+export default Incomes;

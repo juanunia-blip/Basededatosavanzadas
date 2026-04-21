@@ -45,11 +45,9 @@ const addSaving = async (req, res) => {
 const getSavings = async (req, res) => {
   try {
     const filtros = {};
-
     if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
 
     const ahorros = await Ahorro.find(filtros).sort({ createdAt: -1 });
-
     res.status(200).json(ahorros);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener ahorros', error: error.message });
@@ -104,7 +102,7 @@ const savingProgress = async (req, res) => {
       monto_objetivo: item.monto_objetivo,
       monto_actual: item.monto_actual,
       porcentaje: item.monto_objetivo > 0
-        ? (item.monto_actual / item.monto_objetivo) * 100
+        ? Number(((item.monto_actual / item.monto_objetivo) * 100).toFixed(2))
         : 0
     }));
 
@@ -114,10 +112,52 @@ const savingProgress = async (req, res) => {
   }
 };
 
+const savingAlert = async (req, res) => {
+  try {
+    const { usuario_id } = req.query;
+
+    if (!usuario_id) {
+      return res.status(400).json({ message: 'usuario_id es obligatorio' });
+    }
+
+    const ahorros = await Ahorro.find({ usuario_id });
+
+    const resultados = ahorros.map(a => {
+      const progreso = a.monto_objetivo > 0
+        ? (a.monto_actual / a.monto_objetivo) * 100
+        : 0;
+
+      let nivel = 'ok';
+      let mensaje = 'Buen progreso';
+
+      if (progreso < 30) {
+        nivel = 'warning';
+        mensaje = `Bajo progreso en meta: ${a.meta}`;
+      } else if (progreso >= 100) {
+        nivel = 'success';
+        mensaje = `Meta alcanzada: ${a.meta}`;
+      }
+
+      return {
+        ahorro_id: a.ahorro_id,
+        meta: a.meta,
+        progreso: Number(progreso.toFixed(2)),
+        nivel,
+        mensaje
+      };
+    });
+
+    res.status(200).json(resultados);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener alerta de ahorro', error: error.message });
+  }
+};
+
 module.exports = {
   addSaving,
   getSavings,
   updateSaving,
   deleteSaving,
-  savingProgress
+  savingProgress,
+  savingAlert
 };

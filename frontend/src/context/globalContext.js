@@ -9,10 +9,13 @@ export const GlobalProvider = ({ children }) => {
   const [expenses, setExpenses] = useState([]);
   const [error, setError] = useState(null);
 
+  const [editingIncome, setEditingIncome] = useState(null);
+
   const addIncome = async (income) => {
     try {
       await axios.post(`${BASE_URL}add-income`, income);
       getIncomes();
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.message || "Error al agregar ingreso");
     }
@@ -22,6 +25,7 @@ export const GlobalProvider = ({ children }) => {
     try {
       const response = await axios.get(`${BASE_URL}get-incomes`);
       setIncomes(response.data);
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.message || "Error al obtener ingresos");
     }
@@ -31,8 +35,20 @@ export const GlobalProvider = ({ children }) => {
     try {
       await axios.delete(`${BASE_URL}delete-income/${id}`);
       getIncomes();
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.message || "Error al eliminar ingreso");
+    }
+  };
+
+  const updateIncome = async (id, incomeData) => {
+    try {
+      await axios.put(`${BASE_URL}update-income/${id}`, incomeData);
+      setEditingIncome(null);
+      getIncomes();
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || "Error al actualizar ingreso");
     }
   };
 
@@ -40,6 +56,7 @@ export const GlobalProvider = ({ children }) => {
     try {
       await axios.post(`${BASE_URL}add-expense`, expense);
       getExpenses();
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.message || "Error al agregar gasto");
     }
@@ -49,6 +66,7 @@ export const GlobalProvider = ({ children }) => {
     try {
       const response = await axios.get(`${BASE_URL}get-expenses`);
       setExpenses(response.data);
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.message || "Error al obtener gastos");
     }
@@ -58,6 +76,7 @@ export const GlobalProvider = ({ children }) => {
     try {
       await axios.delete(`${BASE_URL}delete-expense/${id}`);
       getExpenses();
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.message || "Error al eliminar gasto");
     }
@@ -73,8 +92,10 @@ export const GlobalProvider = ({ children }) => {
 
   const transactionHistory = () => {
     const history = [...incomes, ...expenses];
-    history.sort((a, b) => new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha));
-    return history.slice(0, 3);
+    history.sort(
+      (a, b) => new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha)
+    );
+    return history.slice(0, 5);
   };
 
   return (
@@ -83,9 +104,13 @@ export const GlobalProvider = ({ children }) => {
         incomes,
         expenses,
         error,
+        setError,
         addIncome,
         getIncomes,
         deleteIncome,
+        updateIncome,
+        editingIncome,
+        setEditingIncome,
         addExpense,
         getExpenses,
         deleteExpense,
