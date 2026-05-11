@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+
+# Cache
+.cache/
+frontend/node_modules/.cache/
+
+# Build folders
+dist/
+build/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
