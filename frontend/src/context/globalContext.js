@@ -10,6 +10,7 @@ export const GlobalProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const [editingIncome, setEditingIncome] = useState(null);
+  const [financialStatus, setFinancialStatus] = useState(null);
 
   const addIncome = async (income) => {
     try {
@@ -82,6 +83,18 @@ export const GlobalProvider = ({ children }) => {
     }
   };
 
+  const getFinancialStatus = async (usuario_id = "U001", mes = "Febrero") => {
+    try {
+      const response = await axios.get(
+        `${BASE_URL}financial-status?usuario_id=${usuario_id}&mes=${mes}`
+      );
+      setFinancialStatus(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || "Error al obtener estado financiero");
+    }
+  };
+
   const totalIncome = () =>
     incomes.reduce((acc, item) => acc + Number(item.monto || 0), 0);
 
@@ -118,6 +131,8 @@ export const GlobalProvider = ({ children }) => {
         totalExpense,
         totalBalance,
         transactionHistory,
+        financialStatus,
+        getFinancialStatus,
       }}
     >
       {children}
