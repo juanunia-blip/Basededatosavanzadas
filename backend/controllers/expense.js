@@ -4,29 +4,57 @@ const Categoria = require('../models/CategoryModel');
 
 const addExpense = async (req, res) => {
   try {
-    const { gasto_id, usuario_id, categoria_id, monto, descripcion, fecha } = req.body;
+    let {
+      gasto_id,
+      usuario_id,
+      categoria_id,
+      monto,
+      descripcion,
+      fecha
+    } = req.body;
 
-    if (!gasto_id || !usuario_id || !categoria_id || !descripcion || !fecha) {
-      return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+    if (
+      !usuario_id ||
+      !categoria_id ||
+      !descripcion ||
+      !fecha
+    ) {
+      return res.status(400).json({
+        message: 'Todos los campos son obligatorios'
+      });
     }
 
-    if (typeof monto !== 'number' || monto <= 0) {
-      return res.status(400).json({ message: 'El monto debe ser mayor que cero' });
+    monto = Number(monto);
+
+    if (isNaN(monto) || monto <= 0) {
+      return res.status(400).json({
+        message: 'El monto debe ser mayor que cero'
+      });
     }
 
-    const exists = await Gasto.findOne({ gasto_id });
-    if (exists) {
-      return res.status(400).json({ message: 'El gasto_id ya existe' });
+    // Generar ID automático
+    if (!gasto_id) {
+      gasto_id = `G${Date.now()}`;
     }
 
+    // Validar usuario
     const userExists = await Usuario.findOne({ usuario_id });
+
     if (!userExists) {
-      return res.status(400).json({ message: 'Usuario no existe' });
+      return res.status(400).json({
+        message: 'Usuario no existe'
+      });
     }
 
-    const categoryExists = await Categoria.findOne({ categoria_id });
+    // Validar categoría
+    const categoryExists = await Categoria.findOne({
+      categoria_id
+    });
+
     if (!categoryExists) {
-      return res.status(400).json({ message: 'Categoria no existe' });
+      return res.status(400).json({
+        message: 'Categoria no existe'
+      });
     }
 
     const gasto = new Gasto({
@@ -40,9 +68,16 @@ const addExpense = async (req, res) => {
 
     await gasto.save();
 
-    res.status(201).json({ message: 'Gasto creado correctamente', data: gasto });
+    res.status(201).json({
+      message: 'Gasto creado correctamente',
+      data: gasto
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al crear gasto', error: error.message });
+    res.status(500).json({
+      message: 'Error al crear gasto',
+      error: error.message
+    });
   }
 };
 
@@ -50,25 +85,49 @@ const getExpenses = async (req, res) => {
   try {
     const filtros = {};
 
-    if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
-    if (req.query.categoria_id) filtros.categoria_id = req.query.categoria_id;
+    if (req.query.usuario_id) {
+      filtros.usuario_id = req.query.usuario_id;
+    }
+
+    if (req.query.categoria_id) {
+      filtros.categoria_id = req.query.categoria_id;
+    }
 
     if (req.query.min || req.query.max) {
       filtros.monto = {};
-      if (req.query.min) filtros.monto.$gte = Number(req.query.min);
-      if (req.query.max) filtros.monto.$lte = Number(req.query.max);
+
+      if (req.query.min) {
+        filtros.monto.$gte = Number(req.query.min);
+      }
+
+      if (req.query.max) {
+        filtros.monto.$lte = Number(req.query.max);
+      }
     }
 
     if (req.query.fecha_inicio || req.query.fecha_fin) {
       filtros.fecha = {};
-      if (req.query.fecha_inicio) filtros.fecha.$gte = new Date(req.query.fecha_inicio);
-      if (req.query.fecha_fin) filtros.fecha.$lte = new Date(req.query.fecha_fin);
+
+      if (req.query.fecha_inicio) {
+        filtros.fecha.$gte = new Date(req.query.fecha_inicio);
+      }
+
+      if (req.query.fecha_fin) {
+        filtros.fecha.$lte = new Date(req.query.fecha_fin);
+      }
     }
 
-    const gastos = await Gasto.find(filtros).sort({ fecha: -1 });
+    const gastos = await Gasto.find(filtros).sort({
+      fecha: -1
+    });
+
     res.status(200).json(gastos);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener gastos', error: error.message });
+    res.status(500).json({
+      message: 'Error al obtener gastos',
+      error: error.message
+    });
   }
 };
 
@@ -76,15 +135,28 @@ const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const gasto = await Gasto.findByIdAndUpdate(id, req.body, { new: true });
+    const gasto = await Gasto.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true }
+    );
 
     if (!gasto) {
-      return res.status(404).json({ message: 'Gasto no encontrado' });
+      return res.status(404).json({
+        message: 'Gasto no encontrado'
+      });
     }
 
-    res.status(200).json({ message: 'Gasto actualizado correctamente', data: gasto });
+    res.status(200).json({
+      message: 'Gasto actualizado correctamente',
+      data: gasto
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar gasto', error: error.message });
+    res.status(500).json({
+      message: 'Error al actualizar gasto',
+      error: error.message
+    });
   }
 };
 
@@ -95,12 +167,20 @@ const deleteExpense = async (req, res) => {
     const gasto = await Gasto.findByIdAndDelete(id);
 
     if (!gasto) {
-      return res.status(404).json({ message: 'Gasto no encontrado' });
+      return res.status(404).json({
+        message: 'Gasto no encontrado'
+      });
     }
 
-    res.status(200).json({ message: 'Gasto eliminado correctamente' });
+    res.status(200).json({
+      message: 'Gasto eliminado correctamente'
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar gasto', error: error.message });
+    res.status(500).json({
+      message: 'Error al eliminar gasto',
+      error: error.message
+    });
   }
 };
 
@@ -110,14 +190,20 @@ const totalByUser = async (req, res) => {
       {
         $group: {
           _id: '$usuario_id',
-          total_gastado: { $sum: '$monto' }
+          total_gastado: {
+            $sum: '$monto'
+          }
         }
       }
     ]);
 
     res.status(200).json(data);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error', error: error.message });
+    res.status(500).json({
+      message: 'Error',
+      error: error.message
+    });
   }
 };
 
@@ -127,25 +213,40 @@ const averageByCategory = async (req, res) => {
       {
         $group: {
           _id: '$categoria_id',
-          promedio: { $avg: '$monto' }
+          promedio: {
+            $avg: '$monto'
+          }
         }
       }
     ]);
 
     res.status(200).json(data);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error', error: error.message });
+    res.status(500).json({
+      message: 'Error',
+      error: error.message
+    });
   }
 };
 
 const highExpenses = async (req, res) => {
   try {
     const min = Number(req.query.min || 50);
-    const data = await Gasto.find({ monto: { $gt: min } }).sort({ monto: -1 });
+
+    const data = await Gasto.find({
+      monto: { $gt: min }
+    }).sort({
+      monto: -1
+    });
 
     res.status(200).json(data);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error', error: error.message });
+    res.status(500).json({
+      message: 'Error',
+      error: error.message
+    });
   }
 };
 
@@ -155,15 +256,23 @@ const generalReport = async (req, res) => {
       {
         $group: {
           _id: '$categoria_id',
-          total: { $sum: '$monto' },
-          cantidad: { $sum: 1 }
+          total: {
+            $sum: '$monto'
+          },
+          cantidad: {
+            $sum: 1
+          }
         }
       }
     ]);
 
     res.status(200).json(data);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error', error: error.message });
+    res.status(500).json({
+      message: 'Error',
+      error: error.message
+    });
   }
 };
 
@@ -172,15 +281,23 @@ const unusualExpenses = async (req, res) => {
     const { usuario_id } = req.query;
 
     if (!usuario_id) {
-      return res.status(400).json({ message: 'usuario_id es obligatorio' });
+      return res.status(400).json({
+        message: 'usuario_id es obligatorio'
+      });
     }
 
     const promedio = await Gasto.aggregate([
-      { $match: { usuario_id } },
+      {
+        $match: {
+          usuario_id
+        }
+      },
       {
         $group: {
           _id: null,
-          avg: { $avg: '$monto' }
+          avg: {
+            $avg: '$monto'
+          }
         }
       }
     ]);
@@ -189,15 +306,23 @@ const unusualExpenses = async (req, res) => {
 
     const gastosAltos = await Gasto.find({
       usuario_id,
-      monto: { $gt: avg * 2 }
-    }).sort({ monto: -1 });
+      monto: {
+        $gt: avg * 2
+      }
+    }).sort({
+      monto: -1
+    });
 
     res.status(200).json({
       promedio: Number(avg.toFixed(2)),
       gastos_inusuales: gastosAltos
     });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener gastos inusuales', error: error.message });
+    res.status(500).json({
+      message: 'Error al obtener gastos inusuales',
+      error: error.message
+    });
   }
 };
 

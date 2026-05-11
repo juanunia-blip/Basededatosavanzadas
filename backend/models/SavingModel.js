@@ -21,15 +21,19 @@ const SavingSchema = new mongoose.Schema(
     monto_objetivo: {
       type: Number,
       required: true,
-      min: 0
+      min: 1
     },
     monto_actual: {
       type: Number,
       required: true,
+      default: 0,
       min: 0
     }
   },
-  { timestamps: true, collection: 'ahorros' }
+  {
+    timestamps: true,
+    collection: 'ahorros'
+  }
 );
 
 module.exports = mongoose.model('Ahorro', SavingSchema);
