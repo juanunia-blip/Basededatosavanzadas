@@ -110,3 +110,21 @@ export const deleteBudget = async (id) => {
   const response = await api.delete(`/delete-budget/${id}`);
   return response.data;
 };
+export const updateSaving = async (id, data) => {
+  const response = await api.put(`/update-saving/${id}`, data);
+  return response.data;
+};
+
+export const deleteSaving = async (id) => {
+  const response = await api.delete(`/delete-saving/${id}`);
+  return response.data;
+};
+export const askAI = async (data) => {
+  const response = await api.post("/ai/ask", data);
+  return response.data;
+};
+
+export const getAIInsights = async (usuarioId = "U001") => {
+  const response = await api.get(`/ai/insights?usuario_id=${usuarioId}`);
+  return response.data;
+};

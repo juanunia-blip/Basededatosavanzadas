@@ -7,15 +7,33 @@ const formatMoney = (value) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
-const formatDate = (date) =>
-  new Date(date).toLocaleDateString("es-CO", {
+const formatDate = (date) => {
+  const cleanDate = String(date).split("T")[0];
+
+  const [year, month, day] =
+    cleanDate
+      .split("-")
+      .map(Number);
+
+  return new Date(
+    year,
+    month - 1,
+    day
+  ).toLocaleDateString("es-CO", {
     day: "2-digit",
     month: "short",
   });
+};
 
-export default function TopExpenses({ expenses = [] }) {
+export default function TopExpenses({
+  expenses = [],
+}) {
   const topExpenses = [...expenses]
-    .sort((a, b) => Number(b.monto || 0) - Number(a.monto || 0))
+    .sort(
+      (a, b) =>
+        Number(b.monto || 0) -
+        Number(a.monto || 0)
+    )
     .slice(0, 5);
 
   return (
@@ -29,36 +47,51 @@ export default function TopExpenses({ expenses = [] }) {
           <h2 className="text-2xl font-bold text-slate-950">
             Top 5 Gastos del Mes
           </h2>
-          <p className="mt-2 text-slate-500">Tus mayores gastos este mes</p>
+
+          <p className="mt-2 text-slate-500">
+            Tus mayores gastos este mes
+          </p>
         </div>
       </div>
 
       <div className="space-y-4">
-        {topExpenses.map((item, index) => (
-          <article
-            key={item._id}
-            className="flex items-center justify-between rounded-2xl bg-slate-100 p-4"
-          >
-            <div className="flex items-center gap-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 font-bold text-slate-500">
-                {index + 1}
-              </span>
+        {topExpenses.map(
+          (item, index) => (
+            <article
+              key={item._id}
+              className="flex items-center justify-between rounded-2xl bg-slate-100 p-4"
+            >
+              <div className="flex items-center gap-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 font-bold text-slate-500">
+                  {index + 1}
+                </span>
 
-              <div>
-                <h3 className="font-semibold text-slate-950">
-                  {item.descripcion || "Gasto"}
-                </h3>
-                <p className="text-sm text-slate-500">
-                  {item.categoria_id || "Sin categoría"} · {formatDate(item.fecha)}
-                </p>
+                <div>
+                  <h3 className="font-semibold text-slate-950">
+                    {item.descripcion ||
+                      "Gasto"}
+                  </h3>
+
+                  <p className="text-sm text-slate-500">
+                    {item.categoria_id ||
+                      "Sin categoría"}{" "}
+                    ·{" "}
+                    {formatDate(
+                      item.fecha
+                    )}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <strong className="text-red-600">
-              -{formatMoney(item.monto)}
-            </strong>
-          </article>
-        ))}
+              <strong className="text-red-600">
+                -
+                {formatMoney(
+                  item.monto
+                )}
+              </strong>
+            </article>
+          )
+        )}
       </div>
     </section>
   );

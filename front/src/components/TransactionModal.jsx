@@ -1,24 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { createExpense, createIncome } from "../api/financeApi";
+
+import {
+  createIncome,
+  createExpense,
+} from "../api/financeApi";
 
 export default function TransactionModal({
   open,
   onClose,
-  type = "income",
+  type,
   categories = [],
+  accounts = [],
   onSuccess,
 }) {
   const [form, setForm] = useState({
-    descripcion: "",
-    monto: "",
-    fecha: "",
-    categoria_id: "",
-    fuente: "",
     usuario_id: "U001",
+    fuente: "",
+    categoria_id: "",
+    cuenta_id: "",
+    monto: "",
+    descripcion: "",
+    fecha: "",
   });
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        usuario_id: "U001",
+        fuente: "",
+        categoria_id: "",
+        cuenta_id: "",
+        monto: "",
+        descripcion: "",
+        fecha: "",
+      });
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -47,6 +67,7 @@ export default function TransactionModal({
         await createExpense({
           usuario_id: form.usuario_id,
           categoria_id: form.categoria_id,
+          cuenta_id: form.cuenta_id || null,
           monto: Number(form.monto),
           descripcion: form.descripcion,
           fecha: form.fecha,
@@ -55,15 +76,6 @@ export default function TransactionModal({
 
       onSuccess?.();
       onClose();
-
-      setForm({
-        descripcion: "",
-        monto: "",
-        fecha: "",
-        categoria_id: "",
-        fuente: "",
-        usuario_id: "U001",
-      });
     } catch (error) {
       console.error(error);
       alert("Error guardando movimiento");
@@ -74,46 +86,31 @@ export default function TransactionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-2xl">
+      <div className="w-full max-w-xl rounded-3xl bg-white p-8 shadow-2xl">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-950">
-              {type === "income" ? "Nuevo ingreso" : "Nuevo gasto"}
+            <h2 className="text-3xl font-bold text-slate-950">
+              {type === "income" ? "Nuevo ingreso" : "Nuevo egreso"}
             </h2>
 
             <p className="mt-2 text-slate-500">
-              Registra un nuevo movimiento financiero
+              Registra un nuevo movimiento financiero.
             </p>
           </div>
 
           <button
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100"
+            className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"
           >
-            <X size={22} />
+            <X size={24} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Descripción
-            </label>
-
-            <input
-              type="text"
-              name="descripcion"
-              value={form.descripcion}
-              onChange={handleChange}
-              required
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
-            />
-          </div>
-
           {type === "income" ? (
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Fuente
+                Fuente de ingreso
               </label>
 
               <input
@@ -122,14 +119,16 @@ export default function TransactionModal({
                 value={form.fuente}
                 onChange={handleChange}
                 required
+                placeholder="Ej: Freelance"
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
               />
             </div>
           ) : (
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Categoría
-              </label>
+            <>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Categoría
+                </label>
 
                 <select
                   name="categoria_id"
@@ -139,13 +138,42 @@ export default function TransactionModal({
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
                 >
                   <option value="">Selecciona una categoría</option>
+
                   {categories.map((category) => (
-                    <option key={category.categoria_id} value={category.categoria_id}>
+                    <option
+                      key={category.categoria_id}
+                      value={category.categoria_id}
+                    >
                       {category.nombre}
                     </option>
                   ))}
                 </select>
-            </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Cuenta / Tarjeta
+                </label>
+
+                <select
+                  name="cuenta_id"
+                  value={form.cuenta_id}
+                  onChange={handleChange}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
+                >
+                  <option value="">Sin cuenta asociada</option>
+
+                  {accounts.map((account) => (
+                    <option
+                      key={account.cuenta_id}
+                      value={account.cuenta_id}
+                    >
+                      {account.nombre} - {account.banco}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
 
           <div>
@@ -159,6 +187,23 @@ export default function TransactionModal({
               value={form.monto}
               onChange={handleChange}
               required
+              placeholder="0"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">
+              Descripción
+            </label>
+
+            <input
+              type="text"
+              name="descripcion"
+              value={form.descripcion}
+              onChange={handleChange}
+              required
+              placeholder="Descripción del movimiento"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
             />
           </div>
@@ -191,7 +236,7 @@ export default function TransactionModal({
               ? "Guardando..."
               : type === "income"
               ? "Guardar ingreso"
-              : "Guardar gasto"}
+              : "Guardar egreso"}
           </button>
         </form>
       </div>

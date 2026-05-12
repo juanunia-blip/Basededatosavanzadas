@@ -6,6 +6,7 @@ export default function EditTransactionModal({
   open,
   transaction,
   categories = [],
+  accounts = [],
   onClose,
   onSuccess,
 }) {
@@ -14,6 +15,7 @@ export default function EditTransactionModal({
     monto: "",
     fecha: "",
     categoria_id: "",
+    cuenta_id: "",
     fuente: "",
   });
 
@@ -21,16 +23,28 @@ export default function EditTransactionModal({
 
   useEffect(() => {
     if (transaction) {
+      const original = transaction.original || transaction;
+
       setForm({
-        descripcion: transaction.title || "",
-        monto: transaction.amount || "",
-        fecha: transaction.date
-          ? new Date(transaction.date).toISOString().split("T")[0]
+        descripcion: original.descripcion || transaction.title || "",
+        monto: original.monto || transaction.amount || "",
+        fecha: original.fecha
+          ? String(original.fecha).split("T")[0]
+          : transaction.date
+          ? String(transaction.date).split("T")[0]
           : "",
         categoria_id:
-          transaction.type === "expense" ? transaction.category : "",
+          transaction.type === "expense"
+            ? original.categoria_id || transaction.categoria_id || ""
+            : "",
+        cuenta_id:
+          transaction.type === "expense"
+            ? original.cuenta_id || ""
+            : "",
         fuente:
-          transaction.type === "income" ? transaction.category : "",
+          transaction.type === "income"
+            ? original.fuente || transaction.category || ""
+            : "",
       });
     }
   }, [transaction]);
@@ -63,6 +77,7 @@ export default function EditTransactionModal({
         await updateExpense(transaction.id, {
           descripcion: form.descripcion,
           categoria_id: form.categoria_id,
+          cuenta_id: form.cuenta_id || null,
           monto: Number(form.monto),
           fecha: form.fecha,
         });
@@ -133,30 +148,56 @@ export default function EditTransactionModal({
               />
             </div>
           ) : (
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Categoría
-              </label>
+            <>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Categoría
+                </label>
 
-              <select
-                name="categoria_id"
-                value={form.categoria_id}
-                onChange={handleChange}
-                required
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
-              >
-                <option value="">Selecciona una categoría</option>
+                <select
+                  name="categoria_id"
+                  value={form.categoria_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
+                >
+                  <option value="">Selecciona una categoría</option>
 
-                {categories.map((category) => (
-                  <option
-                    key={category.categoria_id}
-                    value={category.categoria_id}
-                  >
-                    {category.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  {categories.map((category) => (
+                    <option
+                      key={category.categoria_id}
+                      value={category.categoria_id}
+                    >
+                      {category.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Cuenta / Tarjeta
+                </label>
+
+                <select
+                  name="cuenta_id"
+                  value={form.cuenta_id || ""}
+                  onChange={handleChange}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
+                >
+                  <option value="">Sin cuenta asociada</option>
+
+                  {accounts.map((account) => (
+                    <option
+                      key={account.cuenta_id}
+                      value={account.cuenta_id}
+                    >
+                      {account.nombre} - {account.banco}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
 
           <div>

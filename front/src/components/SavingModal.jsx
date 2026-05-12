@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { createSaving } from "../api/financeApi";
+import { createSaving, updateSaving } from "../api/financeApi";
 
-export default function SavingModal({ open, onClose, onSuccess }) {
+export default function SavingModal({
+  open,
+  onClose,
+  onSuccess,
+  editingSaving = null,
+}) {
   const [form, setForm] = useState({
     usuario_id: "U001",
     meta: "",
@@ -11,6 +16,24 @@ export default function SavingModal({ open, onClose, onSuccess }) {
   });
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (editingSaving) {
+      setForm({
+        usuario_id: editingSaving.usuario_id || "U001",
+        meta: editingSaving.meta || "",
+        monto_objetivo: editingSaving.monto_objetivo || "",
+        monto_actual: editingSaving.monto_actual || "",
+      });
+    } else {
+      setForm({
+        usuario_id: "U001",
+        meta: "",
+        monto_objetivo: "",
+        monto_actual: "",
+      });
+    }
+  }, [editingSaving]);
 
   if (!open) return null;
 
@@ -27,25 +50,24 @@ export default function SavingModal({ open, onClose, onSuccess }) {
     try {
       setLoading(true);
 
-      await createSaving({
+      const payload = {
         usuario_id: form.usuario_id,
         meta: form.meta,
         monto_objetivo: Number(form.monto_objetivo),
         monto_actual: Number(form.monto_actual),
-      });
+      };
+
+      if (editingSaving) {
+        await updateSaving(editingSaving._id, payload);
+      } else {
+        await createSaving(payload);
+      }
 
       onSuccess?.();
       onClose();
-
-      setForm({
-        usuario_id: "U001",
-        meta: "",
-        monto_objetivo: "",
-        monto_actual: "",
-      });
     } catch (error) {
       console.error(error);
-      alert("Error creando meta de ahorro");
+      alert("Error guardando meta de ahorro");
     } finally {
       setLoading(false);
     }
@@ -57,7 +79,7 @@ export default function SavingModal({ open, onClose, onSuccess }) {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-950">
-              Nueva meta de ahorro
+              {editingSaving ? "Editar meta de ahorro" : "Nueva meta de ahorro"}
             </h2>
             <p className="mt-2 text-slate-500">
               Define una meta y registra tu avance.
@@ -77,13 +99,13 @@ export default function SavingModal({ open, onClose, onSuccess }) {
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Meta
             </label>
+
             <input
               type="text"
               name="meta"
               value={form.meta}
               onChange={handleChange}
               required
-              placeholder="Ej: Viaje, laptop, emergencias"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
             />
           </div>
@@ -92,6 +114,7 @@ export default function SavingModal({ open, onClose, onSuccess }) {
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Monto objetivo
             </label>
+
             <input
               type="number"
               name="monto_objetivo"
@@ -107,6 +130,7 @@ export default function SavingModal({ open, onClose, onSuccess }) {
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Monto actual
             </label>
+
             <input
               type="number"
               name="monto_actual"
@@ -123,7 +147,11 @@ export default function SavingModal({ open, onClose, onSuccess }) {
             disabled={loading}
             className="w-full rounded-2xl bg-blue-700 py-4 font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
           >
-            {loading ? "Guardando..." : "Guardar meta"}
+            {loading
+              ? "Guardando..."
+              : editingSaving
+              ? "Actualizar meta"
+              : "Guardar meta"}
           </button>
         </form>
       </div>

@@ -1,6 +1,16 @@
 import { useState } from "react";
-import { PiggyBank, Plus, Target, TrendingUp } from "lucide-react";
+import {
+  PiggyBank,
+  Plus,
+  Target,
+  TrendingUp,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+
 import SavingModal from "../components/SavingModal";
+import ConfirmModal from "../components/ConfirmModal";
+import { deleteSaving } from "../api/financeApi";
 
 const formatMoney = (value) =>
   new Intl.NumberFormat("es-CO", {
@@ -11,6 +21,9 @@ const formatMoney = (value) =>
 
 export default function Savings({ savings = [], onRefresh }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingSaving, setEditingSaving] = useState(null);
+  const [selectedSaving, setSelectedSaving] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const totalObjective = savings.reduce(
     (acc, item) => acc + Number(item.monto_objetivo || 0),
@@ -25,6 +38,32 @@ export default function Savings({ savings = [], onRefresh }) {
   const globalProgress =
     totalObjective > 0 ? Math.min((totalSaved / totalObjective) * 100, 100) : 0;
 
+  const openCreate = () => {
+    setEditingSaving(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (saving) => {
+    setEditingSaving(saving);
+    setModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedSaving) return;
+
+    try {
+      setDeleteLoading(true);
+      await deleteSaving(selectedSaving._id);
+      setSelectedSaving(null);
+      onRefresh?.();
+    } catch (error) {
+      console.error(error);
+      alert("Error eliminando meta de ahorro");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8 p-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -36,7 +75,7 @@ export default function Savings({ savings = [], onRefresh }) {
         </div>
 
         <button
-          onClick={() => setModalOpen(true)}
+          onClick={openCreate}
           className="flex items-center gap-2 rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800"
         >
           <Plus size={20} />
@@ -126,6 +165,24 @@ export default function Savings({ savings = [], onRefresh }) {
                     style={{ width: `${percent}%` }}
                   />
                 </div>
+
+                <div className="mt-5 flex items-center gap-3">
+                  <button
+                    onClick={() => openEdit(saving)}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-100"
+                  >
+                    <Pencil size={17} />
+                    Editar
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedSaving(saving)}
+                    className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
+                  >
+                    <Trash2 size={17} />
+                    Eliminar
+                  </button>
+                </div>
               </article>
             );
           })}
@@ -142,6 +199,18 @@ export default function Savings({ savings = [], onRefresh }) {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={onRefresh}
+        editingSaving={editingSaving}
+      />
+
+      <ConfirmModal
+        open={Boolean(selectedSaving)}
+        title="Eliminar meta de ahorro"
+        message="Esta acción no se puede deshacer. La meta será eliminada permanentemente."
+        confirmText="Sí, eliminar"
+        cancelText="Cancelar"
+        loading={deleteLoading}
+        onCancel={() => setSelectedSaving(null)}
+        onConfirm={confirmDelete}
       />
     </div>
   );

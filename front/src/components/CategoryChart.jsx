@@ -11,17 +11,27 @@ const formatMoney = (value) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
-export default function CategoryChart({ expenses = [] }) {
-  const total = expenses.reduce((acc, item) => acc + Number(item.monto || 0), 0);
+export default function CategoryChart({ expenses = [], categories = [] }) {
+  const getCategoryName = (categoriaId) => {
+    const category = categories.find(
+      (item) => item.categoria_id === categoriaId
+    );
 
-  const categories = expenses.reduce((acc, item) => {
-    const name = item.categoria || item.category || "Sin categoría";
+    return category?.nombre || categoriaId || "Sin categoría";
+  };
 
+  const total = expenses.reduce(
+    (acc, item) => acc + Number(item.monto || 0),
+    0
+  );
+
+  const grouped = expenses.reduce((acc, item) => {
+    const name = getCategoryName(item.categoria_id);
     acc[name] = (acc[name] || 0) + Number(item.monto || 0);
     return acc;
   }, {});
 
-  const data = Object.entries(categories).map(([name, value], index) => ({
+  const data = Object.entries(grouped).map(([name, value], index) => ({
     name,
     value,
     percent: total > 0 ? ((value / total) * 100).toFixed(1) : 0,

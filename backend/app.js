@@ -1,3 +1,4 @@
+const aiRoutes = require('./routes/ai');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -27,6 +28,7 @@ app.use('/api/v1', budgetRoutes);
 app.use('/api/v1', savingRoutes);
 app.use('/api/v1', reportRoutes);
 app.use('/api/v1', accountRoutes);
+app.use('/api/v1', aiRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });

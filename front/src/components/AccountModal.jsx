@@ -1,9 +1,22 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import {
-  createAccount,
-  updateAccount,
-} from "../api/financeApi";
+import { createAccount, updateAccount } from "../api/financeApi";
+
+const buildDateFromDay = (day) => {
+  if (!day) return "";
+
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const cleanDay = String(day).padStart(2, "0");
+
+  return `${year}-${month}-${cleanDay}`;
+};
+
+const getDayFromDate = (date) => {
+  if (!date) return "";
+  return Number(String(date).split("-")[2]);
+};
 
 export default function AccountModal({
   open,
@@ -32,8 +45,8 @@ export default function AccountModal({
         tipo: editingAccount.tipo || "tarjeta_credito",
         banco: editingAccount.banco || "",
         saldo: editingAccount.saldo || "",
-        fecha_corte: editingAccount.fecha_corte || "",
-        fecha_pago: editingAccount.fecha_pago || "",
+        fecha_corte: buildDateFromDay(editingAccount.fecha_corte),
+        fecha_pago: buildDateFromDay(editingAccount.fecha_pago),
         activa: editingAccount.activa ?? true,
       });
     } else {
@@ -70,8 +83,8 @@ export default function AccountModal({
       const payload = {
         ...form,
         saldo: Number(form.saldo),
-        fecha_corte: Number(form.fecha_corte),
-        fecha_pago: Number(form.fecha_pago),
+        fecha_corte: getDayFromDate(form.fecha_corte),
+        fecha_pago: getDayFromDate(form.fecha_pago),
       };
 
       if (editingAccount) {
@@ -112,10 +125,7 @@ export default function AccountModal({
           </button>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="grid gap-5 md:grid-cols-2"
-        >
+        <form onSubmit={handleSubmit} className="grid gap-5 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">
               Nombre
@@ -157,21 +167,10 @@ export default function AccountModal({
               onChange={handleChange}
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
             >
-              <option value="tarjeta_credito">
-                Tarjeta crédito
-              </option>
-
-              <option value="tarjeta_debito">
-                Tarjeta débito
-              </option>
-
-              <option value="ahorro">
-                Cuenta ahorro
-              </option>
-
-              <option value="servicio">
-                Servicio
-              </option>
+              <option value="tarjeta_credito">Tarjeta crédito</option>
+              <option value="tarjeta_debito">Tarjeta débito</option>
+              <option value="ahorro">Cuenta ahorro</option>
+              <option value="servicio">Servicio</option>
             </select>
           </div>
 
@@ -192,39 +191,35 @@ export default function AccountModal({
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Fecha corte
+              Fecha de corte
             </label>
 
             <input
-              type="number"
+              type="date"
               name="fecha_corte"
               value={form.fecha_corte}
               onChange={handleChange}
               required
-              min="1"
-              max="31"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
             />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-700">
-              Fecha pago
+              Fecha de pago
             </label>
 
             <input
-              type="number"
+              type="date"
               name="fecha_pago"
               value={form.fecha_pago}
               onChange={handleChange}
               required
-              min="1"
-              max="31"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600"
             />
           </div>
 
-          <div className="md:col-span-2 flex items-center gap-3">
+          <div className="flex items-center gap-3 md:col-span-2">
             <input
               type="checkbox"
               name="activa"
@@ -240,7 +235,7 @@ export default function AccountModal({
           <button
             type="submit"
             disabled={loading}
-            className="md:col-span-2 rounded-2xl bg-blue-700 py-4 font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+            className="rounded-2xl bg-blue-700 py-4 font-semibold text-white hover:bg-blue-800 disabled:opacity-60 md:col-span-2"
           >
             {loading
               ? "Guardando..."

@@ -4,6 +4,7 @@ import { Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import TransactionModal from "./components/TransactionModal";
+import FloatingAssistant from "./components/FloatingAssistant";
 
 import Dashboard from "./pages/Dashboard";
 import Movements from "./pages/Movements";
@@ -29,14 +30,18 @@ function App() {
     refetch,
   } = useFinanceData();
 
-  const [incomeModal, setIncomeModal] = useState(false);
-  const [expenseModal, setExpenseModal] = useState(false);
+  const [incomeModal, setIncomeModal] =
+    useState(false);
+
+  const [expenseModal, setExpenseModal] =
+    useState(false);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100">
         <p className="text-lg font-semibold text-slate-600">
-          Cargando datos financieros...
+          Cargando datos
+          financieros...
         </p>
       </div>
     );
@@ -57,10 +62,20 @@ function App() {
                 incomes={incomes}
                 expenses={expenses}
                 accounts={accounts}
-                categories={categories}
+                categories={
+                  categories
+                }
                 summary={summary}
-                onOpenIncome={() => setIncomeModal(true)}
-                onOpenExpense={() => setExpenseModal(true)}
+                onOpenIncome={() =>
+                  setIncomeModal(
+                    true
+                  )
+                }
+                onOpenExpense={() =>
+                  setExpenseModal(
+                    true
+                  )
+                }
               />
             }
           />
@@ -71,8 +86,21 @@ function App() {
               <Movements
                 incomes={incomes}
                 expenses={expenses}
-                categories={categories}
+                categories={
+                  categories
+                }
+                accounts={accounts}
                 onRefresh={refetch}
+                onOpenIncome={() =>
+                  setIncomeModal(
+                    true
+                  )
+                }
+                onOpenExpense={() =>
+                  setExpenseModal(
+                    true
+                  )
+                }
               />
             }
           />
@@ -81,7 +109,9 @@ function App() {
             path="/categorias"
             element={
               <Categories
-                categories={categories}
+                categories={
+                  categories
+                }
                 onRefresh={refetch}
               />
             }
@@ -103,7 +133,9 @@ function App() {
               <Budgets
                 budgets={budgets}
                 expenses={expenses}
-                categories={categories}
+                categories={
+                  categories
+                }
                 onRefresh={refetch}
               />
             }
@@ -133,17 +165,30 @@ function App() {
 
       <TransactionModal
         open={incomeModal}
-        onClose={() => setIncomeModal(false)}
+        onClose={() =>
+          setIncomeModal(false)
+        }
         type="income"
         onSuccess={refetch}
       />
 
       <TransactionModal
         open={expenseModal}
-        onClose={() => setExpenseModal(false)}
+        onClose={() =>
+          setExpenseModal(false)
+        }
         type="expense"
         categories={categories}
+        accounts={accounts}
         onSuccess={refetch}
+      />
+
+      <FloatingAssistant
+        incomes={incomes}
+        expenses={expenses}
+        categories={categories}
+        budgets={budgets}
+        savings={savings}
       />
     </div>
   );

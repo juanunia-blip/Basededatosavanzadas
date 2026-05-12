@@ -1,6 +1,7 @@
 const Gasto = require('../models/ExpenseModel');
 const Usuario = require('../models/UserModel');
 const Categoria = require('../models/CategoryModel');
+const Cuenta = require('../models/AccountModel');
 
 const addExpense = async (req, res) => {
   try {
@@ -8,6 +9,7 @@ const addExpense = async (req, res) => {
       gasto_id,
       usuario_id,
       categoria_id,
+      cuenta_id,
       monto,
       descripcion,
       fecha
@@ -32,12 +34,10 @@ const addExpense = async (req, res) => {
       });
     }
 
-    // Generar ID automático
     if (!gasto_id) {
       gasto_id = `G${Date.now()}`;
     }
 
-    // Validar usuario
     const userExists = await Usuario.findOne({ usuario_id });
 
     if (!userExists) {
@@ -46,10 +46,7 @@ const addExpense = async (req, res) => {
       });
     }
 
-    // Validar categoría
-    const categoryExists = await Categoria.findOne({
-      categoria_id
-    });
+    const categoryExists = await Categoria.findOne({ categoria_id });
 
     if (!categoryExists) {
       return res.status(400).json({
@@ -57,10 +54,23 @@ const addExpense = async (req, res) => {
       });
     }
 
+    if (cuenta_id) {
+      const accountExists = await Cuenta.findOne({ cuenta_id });
+
+      if (!accountExists) {
+        return res.status(400).json({
+          message: 'Cuenta no existe'
+        });
+      }
+    } else {
+      cuenta_id = null;
+    }
+
     const gasto = new Gasto({
       gasto_id,
       usuario_id,
       categoria_id,
+      cuenta_id,
       monto,
       descripcion,
       fecha
@@ -72,7 +82,6 @@ const addExpense = async (req, res) => {
       message: 'Gasto creado correctamente',
       data: gasto
     });
-
   } catch (error) {
     res.status(500).json({
       message: 'Error al crear gasto',
@@ -91,6 +100,10 @@ const getExpenses = async (req, res) => {
 
     if (req.query.categoria_id) {
       filtros.categoria_id = req.query.categoria_id;
+    }
+
+    if (req.query.cuenta_id) {
+      filtros.cuenta_id = req.query.cuenta_id;
     }
 
     if (req.query.min || req.query.max) {
@@ -122,7 +135,6 @@ const getExpenses = async (req, res) => {
     });
 
     res.status(200).json(gastos);
-
   } catch (error) {
     res.status(500).json({
       message: 'Error al obtener gastos',
@@ -135,10 +147,43 @@ const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (req.body.monto !== undefined) {
+      req.body.monto = Number(req.body.monto);
+    }
+
+    if (req.body.cuenta_id) {
+      const accountExists = await Cuenta.findOne({
+        cuenta_id: req.body.cuenta_id
+      });
+
+      if (!accountExists) {
+        return res.status(400).json({
+          message: 'Cuenta no existe'
+        });
+      }
+    } else if (req.body.cuenta_id === '' || req.body.cuenta_id === undefined) {
+      req.body.cuenta_id = null;
+    }
+
+    if (req.body.categoria_id) {
+      const categoryExists = await Categoria.findOne({
+        categoria_id: req.body.categoria_id
+      });
+
+      if (!categoryExists) {
+        return res.status(400).json({
+          message: 'Categoria no existe'
+        });
+      }
+    }
+
     const gasto = await Gasto.findByIdAndUpdate(
       id,
       req.body,
-      { new: true }
+      {
+        new: true,
+        runValidators: true
+      }
     );
 
     if (!gasto) {
@@ -151,7 +196,6 @@ const updateExpense = async (req, res) => {
       message: 'Gasto actualizado correctamente',
       data: gasto
     });
-
   } catch (error) {
     res.status(500).json({
       message: 'Error al actualizar gasto',
@@ -175,7 +219,6 @@ const deleteExpense = async (req, res) => {
     res.status(200).json({
       message: 'Gasto eliminado correctamente'
     });
-
   } catch (error) {
     res.status(500).json({
       message: 'Error al eliminar gasto',
@@ -198,7 +241,6 @@ const totalByUser = async (req, res) => {
     ]);
 
     res.status(200).json(data);
-
   } catch (error) {
     res.status(500).json({
       message: 'Error',
@@ -221,7 +263,6 @@ const averageByCategory = async (req, res) => {
     ]);
 
     res.status(200).json(data);
-
   } catch (error) {
     res.status(500).json({
       message: 'Error',
@@ -241,7 +282,6 @@ const highExpenses = async (req, res) => {
     });
 
     res.status(200).json(data);
-
   } catch (error) {
     res.status(500).json({
       message: 'Error',
@@ -267,7 +307,6 @@ const generalReport = async (req, res) => {
     ]);
 
     res.status(200).json(data);
-
   } catch (error) {
     res.status(500).json({
       message: 'Error',
@@ -317,7 +356,6 @@ const unusualExpenses = async (req, res) => {
       promedio: Number(avg.toFixed(2)),
       gastos_inusuales: gastosAltos
     });
-
   } catch (error) {
     res.status(500).json({
       message: 'Error al obtener gastos inusuales',
