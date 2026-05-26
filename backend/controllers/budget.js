@@ -3,19 +3,31 @@ const Gasto = require('../models/ExpenseModel');
 
 const addBudget = async (req, res) => {
   try {
-    const { presupuesto_id, usuario_id, categoria_id, limite, mes } = req.body;
+    const usuario_id = req.usuario.usuario_id;
 
-    if (!presupuesto_id || !usuario_id || !categoria_id || !mes) {
-      return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+    const { presupuesto_id, categoria_id, limite, mes } = req.body;
+
+    if (!presupuesto_id || !categoria_id || !mes) {
+      return res.status(400).json({
+        message: 'Todos los campos son obligatorios'
+      });
     }
 
     if (typeof limite !== 'number' || limite <= 0) {
-      return res.status(400).json({ message: 'El límite debe ser mayor que cero' });
+      return res.status(400).json({
+        message: 'El límite debe ser mayor que cero'
+      });
     }
 
-    const exists = await Presupuesto.findOne({ presupuesto_id });
+    const exists = await Presupuesto.findOne({
+      presupuesto_id,
+      usuario_id
+    });
+
     if (exists) {
-      return res.status(400).json({ message: 'El presupuesto_id ya existe' });
+      return res.status(400).json({
+        message: 'El presupuesto_id ya existe'
+      });
     }
 
     const presupuesto = new Presupuesto({
@@ -28,23 +40,43 @@ const addBudget = async (req, res) => {
 
     await presupuesto.save();
 
-    res.status(201).json({ message: 'Presupuesto creado correctamente', data: presupuesto });
+    res.status(201).json({
+      message: 'Presupuesto creado correctamente',
+      data: presupuesto
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al crear presupuesto', error: error.message });
+    res.status(500).json({
+      message: 'Error al crear presupuesto',
+      error: error.message
+    });
   }
 };
 
 const getBudgets = async (req, res) => {
   try {
-    const filtros = {};
-    if (req.query.usuario_id) filtros.usuario_id = req.query.usuario_id;
-    if (req.query.categoria_id) filtros.categoria_id = req.query.categoria_id;
-    if (req.query.mes) filtros.mes = req.query.mes;
+    const filtros = {
+      usuario_id: req.usuario.usuario_id
+    };
 
-    const presupuestos = await Presupuesto.find(filtros).sort({ createdAt: -1 });
+    if (req.query.categoria_id) {
+      filtros.categoria_id = req.query.categoria_id;
+    }
+
+    if (req.query.mes) {
+      filtros.mes = req.query.mes;
+    }
+
+    const presupuestos = await Presupuesto.find(filtros)
+      .sort({ createdAt: -1 });
+
     res.status(200).json(presupuestos);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener presupuestos', error: error.message });
+    res.status(500).json({
+      message: 'Error al obtener presupuestos',
+      error: error.message
+    });
   }
 };
 
@@ -52,15 +84,36 @@ const updateBudget = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const presupuesto = await Presupuesto.findByIdAndUpdate(id, req.body, { new: true });
+    delete req.body.usuario_id;
+
+    const presupuesto = await Presupuesto.findOneAndUpdate(
+      {
+        _id: id,
+        usuario_id: req.usuario.usuario_id
+      },
+      req.body,
+      {
+        new: true,
+        runValidators: true
+      }
+    );
 
     if (!presupuesto) {
-      return res.status(404).json({ message: 'Presupuesto no encontrado' });
+      return res.status(404).json({
+        message: 'Presupuesto no encontrado'
+      });
     }
 
-    res.status(200).json({ message: 'Presupuesto actualizado correctamente', data: presupuesto });
+    res.status(200).json({
+      message: 'Presupuesto actualizado correctamente',
+      data: presupuesto
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar presupuesto', error: error.message });
+    res.status(500).json({
+      message: 'Error al actualizar presupuesto',
+      error: error.message
+    });
   }
 };
 
@@ -68,30 +121,51 @@ const deleteBudget = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const presupuesto = await Presupuesto.findByIdAndDelete(id);
+    const presupuesto = await Presupuesto.findOneAndDelete({
+      _id: id,
+      usuario_id: req.usuario.usuario_id
+    });
 
     if (!presupuesto) {
-      return res.status(404).json({ message: 'Presupuesto no encontrado' });
+      return res.status(404).json({
+        message: 'Presupuesto no encontrado'
+      });
     }
 
-    res.status(200).json({ message: 'Presupuesto eliminado correctamente' });
+    res.status(200).json({
+      message: 'Presupuesto eliminado correctamente'
+    });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar presupuesto', error: error.message });
+    res.status(500).json({
+      message: 'Error al eliminar presupuesto',
+      error: error.message
+    });
   }
 };
 
 const checkBudgetStatus = async (req, res) => {
   try {
-    const { usuario_id, categoria_id, mes } = req.query;
+    const usuario_id = req.usuario.usuario_id;
 
-    if (!usuario_id || !categoria_id || !mes) {
-      return res.status(400).json({ message: 'usuario_id, categoria_id y mes son obligatorios' });
+    const { categoria_id, mes } = req.query;
+
+    if (!categoria_id || !mes) {
+      return res.status(400).json({
+        message: 'categoria_id y mes son obligatorios'
+      });
     }
 
-    const presupuesto = await Presupuesto.findOne({ usuario_id, categoria_id, mes });
+    const presupuesto = await Presupuesto.findOne({
+      usuario_id,
+      categoria_id,
+      mes
+    });
 
     if (!presupuesto) {
-      return res.status(404).json({ message: 'Presupuesto no encontrado' });
+      return res.status(404).json({
+        message: 'Presupuesto no encontrado'
+      });
     }
 
     const meses = {
@@ -110,11 +184,15 @@ const checkBudgetStatus = async (req, res) => {
     };
 
     const monthIndex = meses[mes];
+
     if (monthIndex === undefined) {
-      return res.status(400).json({ message: 'Mes inválido' });
+      return res.status(400).json({
+        message: 'Mes inválido'
+      });
     }
 
     const year = 2024;
+
     const start = new Date(year, monthIndex, 1);
     const end = new Date(year, monthIndex + 1, 1);
 
@@ -123,21 +201,28 @@ const checkBudgetStatus = async (req, res) => {
         $match: {
           usuario_id,
           categoria_id,
-          fecha: { $gte: start, $lt: end }
+          fecha: {
+            $gte: start,
+            $lt: end
+          }
         }
       },
       {
         $group: {
           _id: null,
-          total_gastado: { $sum: '$monto' }
+          total_gastado: {
+            $sum: '$monto'
+          }
         }
       }
     ]);
 
     const totalGastado = gastos[0]?.total_gastado || 0;
-    const porcentaje = presupuesto.limite > 0
-      ? (totalGastado / presupuesto.limite) * 100
-      : 0;
+
+    const porcentaje =
+      presupuesto.limite > 0
+        ? (totalGastado / presupuesto.limite) * 100
+        : 0;
 
     res.status(200).json({
       usuario_id,
@@ -153,20 +238,31 @@ const checkBudgetStatus = async (req, res) => {
           ? 'Cerca del límite'
           : 'Dentro del presupuesto'
     });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al verificar presupuesto', error: error.message });
+    res.status(500).json({
+      message: 'Error al verificar presupuesto',
+      error: error.message
+    });
   }
 };
 
 const getBudgetAlerts = async (req, res) => {
   try {
-    const { usuario_id, mes } = req.query;
+    const usuario_id = req.usuario.usuario_id;
 
-    if (!usuario_id || !mes) {
-      return res.status(400).json({ message: 'usuario_id y mes son obligatorios' });
+    const { mes } = req.query;
+
+    if (!mes) {
+      return res.status(400).json({
+        message: 'mes es obligatorio'
+      });
     }
 
-    const presupuestos = await Presupuesto.find({ usuario_id, mes });
+    const presupuestos = await Presupuesto.find({
+      usuario_id,
+      mes
+    });
 
     if (!presupuestos.length) {
       return res.status(200).json([]);
@@ -188,37 +284,49 @@ const getBudgetAlerts = async (req, res) => {
     };
 
     const monthIndex = meses[mes];
+
     if (monthIndex === undefined) {
-      return res.status(400).json({ message: 'Mes inválido' });
+      return res.status(400).json({
+        message: 'Mes inválido'
+      });
     }
 
     const year = 2024;
+
     const start = new Date(year, monthIndex, 1);
     const end = new Date(year, monthIndex + 1, 1);
 
     const alertas = [];
 
     for (const presupuesto of presupuestos) {
+
       const gastos = await Gasto.aggregate([
         {
           $match: {
-            usuario_id: presupuesto.usuario_id,
+            usuario_id,
             categoria_id: presupuesto.categoria_id,
-            fecha: { $gte: start, $lt: end }
+            fecha: {
+              $gte: start,
+              $lt: end
+            }
           }
         },
         {
           $group: {
             _id: null,
-            total_gastado: { $sum: '$monto' }
+            total_gastado: {
+              $sum: '$monto'
+            }
           }
         }
       ]);
 
       const totalGastado = gastos[0]?.total_gastado || 0;
-      const porcentaje = presupuesto.limite > 0
-        ? (totalGastado / presupuesto.limite) * 100
-        : 0;
+
+      const porcentaje =
+        presupuesto.limite > 0
+          ? (totalGastado / presupuesto.limite) * 100
+          : 0;
 
       let nivel = 'ok';
       let mensaje = 'Presupuesto en buen estado';
@@ -243,8 +351,12 @@ const getBudgetAlerts = async (req, res) => {
     }
 
     res.status(200).json(alertas);
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener alertas', error: error.message });
+    res.status(500).json({
+      message: 'Error al obtener alertas',
+      error: error.message
+    });
   }
 };
 

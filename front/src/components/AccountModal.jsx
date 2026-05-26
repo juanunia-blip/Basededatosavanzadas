@@ -25,7 +25,7 @@ export default function AccountModal({
   editingAccount = null,
 }) {
   const [form, setForm] = useState({
-    usuario_id: "U001",
+    
     nombre: "",
     tipo: "tarjeta_credito",
     banco: "",
@@ -40,7 +40,7 @@ export default function AccountModal({
   useEffect(() => {
     if (editingAccount) {
       setForm({
-        usuario_id: editingAccount.usuario_id || "U001",
+        usuario_id: editingAccount.usuario_id,
         nombre: editingAccount.nombre || "",
         tipo: editingAccount.tipo || "tarjeta_credito",
         banco: editingAccount.banco || "",
@@ -51,7 +51,7 @@ export default function AccountModal({
       });
     } else {
       setForm({
-        usuario_id: "U001",
+        
         nombre: "",
         tipo: "tarjeta_credito",
         banco: "",

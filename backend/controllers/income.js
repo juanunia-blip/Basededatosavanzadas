@@ -1,11 +1,12 @@
 const Ingreso = require('../models/IncomeModel');
-const Usuario = require('../models/UserModel');
 
 const addIncome = async (req, res) => {
   try {
+
+    const usuario_id = req.usuario.usuario_id;
+
     let {
       ingreso_id,
-      usuario_id,
       fuente,
       monto,
       descripcion,
@@ -13,7 +14,6 @@ const addIncome = async (req, res) => {
     } = req.body;
 
     if (
-      !usuario_id ||
       !fuente ||
       !descripcion ||
       !fecha
@@ -34,17 +34,6 @@ const addIncome = async (req, res) => {
     // Generar ID automático
     if (!ingreso_id) {
       ingreso_id = `I${Date.now()}`;
-    }
-
-    // Validar usuario
-    const userExists = await Usuario.findOne({
-      usuario_id
-    });
-
-    if (!userExists) {
-      return res.status(400).json({
-        message: 'Usuario no existe'
-      });
     }
 
     const ingreso = new Ingreso({
@@ -73,13 +62,13 @@ const addIncome = async (req, res) => {
 
 const getIncomes = async (req, res) => {
   try {
-    const filtros = {};
 
-    if (req.query.usuario_id) {
-      filtros.usuario_id = req.query.usuario_id;
-    }
+    const filtros = {
+      usuario_id: req.usuario.usuario_id
+    };
 
     if (req.query.min || req.query.max) {
+
       filtros.monto = {};
 
       if (req.query.min) {
@@ -92,6 +81,7 @@ const getIncomes = async (req, res) => {
     }
 
     if (req.query.fecha_inicio || req.query.fecha_fin) {
+
       filtros.fecha = {};
 
       if (req.query.fecha_inicio) {
@@ -103,9 +93,8 @@ const getIncomes = async (req, res) => {
       }
     }
 
-    const ingresos = await Ingreso.find(filtros).sort({
-      fecha: -1
-    });
+    const ingresos = await Ingreso.find(filtros)
+      .sort({ fecha: -1 });
 
     res.status(200).json(ingresos);
 
@@ -119,12 +108,21 @@ const getIncomes = async (req, res) => {
 
 const updateIncome = async (req, res) => {
   try {
+
     const { id } = req.params;
 
-    const ingreso = await Ingreso.findByIdAndUpdate(
-      id,
+    delete req.body.usuario_id;
+
+    const ingreso = await Ingreso.findOneAndUpdate(
+      {
+        _id: id,
+        usuario_id: req.usuario.usuario_id
+      },
       req.body,
-      { new: true }
+      {
+        new: true,
+        runValidators: true
+      }
     );
 
     if (!ingreso) {
@@ -148,9 +146,13 @@ const updateIncome = async (req, res) => {
 
 const deleteIncome = async (req, res) => {
   try {
+
     const { id } = req.params;
 
-    const ingreso = await Ingreso.findByIdAndDelete(id);
+    const ingreso = await Ingreso.findOneAndDelete({
+      _id: id,
+      usuario_id: req.usuario.usuario_id
+    });
 
     if (!ingreso) {
       return res.status(404).json({

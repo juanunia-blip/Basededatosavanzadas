@@ -1,5 +1,7 @@
 const router = require('express').Router();
 
+const { protect } = require('../middleware/auth');
+
 const {
   addBudget,
   getBudgets,
@@ -9,11 +11,48 @@ const {
   getBudgetAlerts
 } = require('../controllers/budget');
 
-router.post('/add-budget', addBudget);
-router.get('/get-budgets', getBudgets);
-router.put('/update-budget/:id', updateBudget);
-router.delete('/delete-budget/:id', deleteBudget);
-router.get('/check-budget', checkBudgetStatus);
-router.get('/budget-alerts', getBudgetAlerts);
+/* =========================
+   CRUD PRESUPUESTOS
+========================= */
+
+router.post(
+  '/add-budget',
+  protect,
+  addBudget
+);
+
+router.get(
+  '/get-budgets',
+  protect,
+  getBudgets
+);
+
+router.put(
+  '/update-budget/:id',
+  protect,
+  updateBudget
+);
+
+router.delete(
+  '/delete-budget/:id',
+  protect,
+  deleteBudget
+);
+
+/* =========================
+   REPORTES PRESUPUESTO
+========================= */
+
+router.get(
+  '/check-budget',
+  protect,
+  checkBudgetStatus
+);
+
+router.get(
+  '/budget-alerts',
+  protect,
+  getBudgetAlerts
+);
 
 module.exports = router;

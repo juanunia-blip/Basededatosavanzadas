@@ -15,7 +15,7 @@ export default function TransactionModal({
   onSuccess,
 }) {
   const [form, setForm] = useState({
-    usuario_id: "U001",
+    
     fuente: "",
     categoria_id: "",
     cuenta_id: "",
@@ -29,7 +29,7 @@ export default function TransactionModal({
   useEffect(() => {
     if (open) {
       setForm({
-        usuario_id: "U001",
+        
         fuente: "",
         categoria_id: "",
         cuenta_id: "",

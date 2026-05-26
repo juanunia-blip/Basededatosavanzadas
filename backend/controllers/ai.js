@@ -10,7 +10,7 @@ const {
   buildFinancialSummary,
 } = require("../services/financialAgentService");
 
-const getFinancialData = async (usuario_id = "U001") => {
+const getFinancialData = async (usuario_id) => {
   const [
     incomes,
     expenses,
@@ -21,7 +21,7 @@ const getFinancialData = async (usuario_id = "U001") => {
   ] = await Promise.all([
     Ingreso.find({ usuario_id }).sort({ fecha: -1 }).lean(),
     Gasto.find({ usuario_id }).sort({ fecha: -1 }).lean(),
-    Categoria.find().lean(),
+    Categoria.find({ usuario_id }).lean(),
     Cuenta.find({ usuario_id }).lean(),
     Presupuesto.find({ usuario_id }).lean(),
     Ahorro.find({ usuario_id }).lean(),
@@ -39,11 +39,13 @@ const getFinancialData = async (usuario_id = "U001") => {
 
 const askAI = async (req, res) => {
   try {
-    const {
-      question,
-      usuario_id = "U001",
-      history = [],
-    } = req.body;
+    const { question, history = [] } = req.body;
+
+    if (!req.usuario?.usuario_id) {
+      return res.status(401).json({
+        message: "Usuario no autenticado",
+      });
+    }
 
     if (!question) {
       return res.status(400).json({
@@ -51,16 +53,20 @@ const askAI = async (req, res) => {
       });
     }
 
+    const usuario_id = req.usuario.usuario_id;
+
     const financialData = await getFinancialData(usuario_id);
 
     const answer = await askFinancialAgent({
       question,
       financialData,
       history,
+      usuario_id,
     });
 
     res.status(200).json({
       provider: process.env.AI_PROVIDER || "local",
+      usuario_id,
       answer,
     });
   } catch (error) {
@@ -73,7 +79,13 @@ const askAI = async (req, res) => {
 
 const getAIInsights = async (req, res) => {
   try {
-    const { usuario_id = "U001" } = req.query;
+    if (!req.usuario?.usuario_id) {
+      return res.status(401).json({
+        message: "Usuario no autenticado",
+      });
+    }
+
+    const usuario_id = req.usuario.usuario_id;
 
     const financialData = await getFinancialData(usuario_id);
     const summary = buildFinancialSummary(financialData);
@@ -89,7 +101,7 @@ const getAIInsights = async (req, res) => {
           : `Tienes un balance negativo de ${summary.formatted.balance}.`,
     });
 
-    const topCategory = Object.entries(summary.expensesByCategory).sort(
+    const topCategory = Object.entries(summary.expensesByCategory || {}).sort(
       (a, b) => b[1] - a[1]
     )[0];
 
@@ -109,6 +121,7 @@ const getAIInsights = async (req, res) => {
     }
 
     res.status(200).json({
+      usuario_id,
       summary,
       insights,
     });

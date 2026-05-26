@@ -13,10 +13,22 @@ import Accounts from "./pages/Accounts";
 import Budgets from "./pages/Budgets";
 import Savings from "./pages/Savings";
 import Profile from "./pages/Profile";
+import Login from "./pages/Login";
 
 import { useFinanceData } from "./hooks/useFinanceData";
+import { useAuth } from "./context/AuthContext";
 
 function App() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Login />;
+  }
+
+  return <PrivateApp />;
+}
+
+function PrivateApp() {
   const {
     incomes,
     expenses,
@@ -30,18 +42,14 @@ function App() {
     refetch,
   } = useFinanceData();
 
-  const [incomeModal, setIncomeModal] =
-    useState(false);
-
-  const [expenseModal, setExpenseModal] =
-    useState(false);
+  const [incomeModal, setIncomeModal] = useState(false);
+  const [expenseModal, setExpenseModal] = useState(false);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100">
         <p className="text-lg font-semibold text-slate-600">
-          Cargando datos
-          financieros...
+          Cargando datos financieros...
         </p>
       </div>
     );
@@ -62,20 +70,10 @@ function App() {
                 incomes={incomes}
                 expenses={expenses}
                 accounts={accounts}
-                categories={
-                  categories
-                }
+                categories={categories}
                 summary={summary}
-                onOpenIncome={() =>
-                  setIncomeModal(
-                    true
-                  )
-                }
-                onOpenExpense={() =>
-                  setExpenseModal(
-                    true
-                  )
-                }
+                onOpenIncome={() => setIncomeModal(true)}
+                onOpenExpense={() => setExpenseModal(true)}
               />
             }
           />
@@ -86,21 +84,11 @@ function App() {
               <Movements
                 incomes={incomes}
                 expenses={expenses}
-                categories={
-                  categories
-                }
+                categories={categories}
                 accounts={accounts}
                 onRefresh={refetch}
-                onOpenIncome={() =>
-                  setIncomeModal(
-                    true
-                  )
-                }
-                onOpenExpense={() =>
-                  setExpenseModal(
-                    true
-                  )
-                }
+                onOpenIncome={() => setIncomeModal(true)}
+                onOpenExpense={() => setExpenseModal(true)}
               />
             }
           />
@@ -109,9 +97,7 @@ function App() {
             path="/categorias"
             element={
               <Categories
-                categories={
-                  categories
-                }
+                categories={categories}
                 onRefresh={refetch}
               />
             }
@@ -133,9 +119,7 @@ function App() {
               <Budgets
                 budgets={budgets}
                 expenses={expenses}
-                categories={
-                  categories
-                }
+                categories={categories}
                 onRefresh={refetch}
               />
             }
@@ -165,18 +149,14 @@ function App() {
 
       <TransactionModal
         open={incomeModal}
-        onClose={() =>
-          setIncomeModal(false)
-        }
+        onClose={() => setIncomeModal(false)}
         type="income"
         onSuccess={refetch}
       />
 
       <TransactionModal
         open={expenseModal}
-        onClose={() =>
-          setExpenseModal(false)
-        }
+        onClose={() => setExpenseModal(false)}
         type="expense"
         categories={categories}
         accounts={accounts}

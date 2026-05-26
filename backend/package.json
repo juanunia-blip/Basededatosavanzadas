@@ -11,9 +11,11 @@
   "dependencies": {
     "@google/genai": "^2.0.1",
     "backend": "file:",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^7.0.3",
     "nodemon": "^2.0.22",
     "openai": "^6.37.0"

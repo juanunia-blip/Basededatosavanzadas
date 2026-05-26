@@ -9,7 +9,7 @@ export default function SavingModal({
   editingSaving = null,
 }) {
   const [form, setForm] = useState({
-    usuario_id: "U001",
+    
     meta: "",
     monto_objetivo: "",
     monto_actual: "",
@@ -20,14 +20,14 @@ export default function SavingModal({
   useEffect(() => {
     if (editingSaving) {
       setForm({
-        usuario_id: editingSaving.usuario_id || "U001",
+        usuario_id: editingSaving.usuario_id,
         meta: editingSaving.meta || "",
         monto_objetivo: editingSaving.monto_objetivo || "",
         monto_actual: editingSaving.monto_actual || "",
       });
     } else {
       setForm({
-        usuario_id: "U001",
+        
         meta: "",
         monto_objetivo: "",
         monto_actual: "",

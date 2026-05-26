@@ -10,7 +10,7 @@ export default function BudgetModal({
   editingBudget = null,
 }) {
   const [form, setForm] = useState({
-    usuario_id: "U001",
+    
     categoria_id: "",
     limite: "",
     mes: "Mayo",
@@ -21,14 +21,14 @@ export default function BudgetModal({
   useEffect(() => {
     if (editingBudget) {
       setForm({
-        usuario_id: editingBudget.usuario_id || "U001",
+        usuario_id: editingBudget.usuario_id,
         categoria_id: editingBudget.categoria_id || "",
         limite: editingBudget.limite || "",
         mes: editingBudget.mes || "Mayo",
       });
     } else {
       setForm({
-        usuario_id: "U001",
+        
         categoria_id: "",
         limite: "",
         mes: "Mayo",

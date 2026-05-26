@@ -1,5 +1,7 @@
 const router = require('express').Router();
 
+const { protect } = require('../middleware/auth');
+
 const {
   addSaving,
   getSavings,
@@ -9,14 +11,48 @@ const {
   savingAlert
 } = require('../controllers/saving');
 
-// CRUD ahorros
-router.post('/add-saving', addSaving);
-router.get('/get-savings', getSavings);
-router.put('/update-saving/:id', updateSaving);
-router.delete('/delete-saving/:id', deleteSaving);
+/* =========================
+   CRUD AHORROS
+========================= */
 
-// Reportes y métricas
-router.get('/saving-progress', savingProgress);
-router.get('/saving-alert', savingAlert);
+router.post(
+  '/add-saving',
+  protect,
+  addSaving
+);
+
+router.get(
+  '/get-savings',
+  protect,
+  getSavings
+);
+
+router.put(
+  '/update-saving/:id',
+  protect,
+  updateSaving
+);
+
+router.delete(
+  '/delete-saving/:id',
+  protect,
+  deleteSaving
+);
+
+/* =========================
+   REPORTES Y MÉTRICAS
+========================= */
+
+router.get(
+  '/saving-progress',
+  protect,
+  savingProgress
+);
+
+router.get(
+  '/saving-alert',
+  protect,
+  savingAlert
+);
 
 module.exports = router;

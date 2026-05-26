@@ -1,28 +1,23 @@
-const Gasto = require('../models/ExpenseModel');
-const Usuario = require('../models/UserModel');
-const Categoria = require('../models/CategoryModel');
-const Cuenta = require('../models/AccountModel');
+const Gasto = require("../models/ExpenseModel");
+const Categoria = require("../models/CategoryModel");
+const Cuenta = require("../models/AccountModel");
 
 const addExpense = async (req, res) => {
   try {
     let {
       gasto_id,
-      usuario_id,
       categoria_id,
       cuenta_id,
       monto,
       descripcion,
-      fecha
+      fecha,
     } = req.body;
 
-    if (
-      !usuario_id ||
-      !categoria_id ||
-      !descripcion ||
-      !fecha
-    ) {
+    const usuario_id = req.usuario.usuario_id;
+
+    if (!categoria_id || !descripcion || !fecha) {
       return res.status(400).json({
-        message: 'Todos los campos son obligatorios'
+        message: "Categoria, descripcion y fecha son obligatorios",
       });
     }
 
@@ -30,7 +25,7 @@ const addExpense = async (req, res) => {
 
     if (isNaN(monto) || monto <= 0) {
       return res.status(400).json({
-        message: 'El monto debe ser mayor que cero'
+        message: "El monto debe ser mayor que cero",
       });
     }
 
@@ -38,28 +33,23 @@ const addExpense = async (req, res) => {
       gasto_id = `G${Date.now()}`;
     }
 
-    const userExists = await Usuario.findOne({ usuario_id });
-
-    if (!userExists) {
-      return res.status(400).json({
-        message: 'Usuario no existe'
-      });
-    }
-
     const categoryExists = await Categoria.findOne({ categoria_id });
 
     if (!categoryExists) {
       return res.status(400).json({
-        message: 'Categoria no existe'
+        message: "Categoria no existe",
       });
     }
 
     if (cuenta_id) {
-      const accountExists = await Cuenta.findOne({ cuenta_id });
+      const accountExists = await Cuenta.findOne({
+        cuenta_id,
+        usuario_id,
+      });
 
       if (!accountExists) {
         return res.status(400).json({
-          message: 'Cuenta no existe'
+          message: "Cuenta no existe para este usuario",
         });
       }
     } else {
@@ -73,30 +63,30 @@ const addExpense = async (req, res) => {
       cuenta_id,
       monto,
       descripcion,
-      fecha
+      fecha,
     });
 
     await gasto.save();
 
     res.status(201).json({
-      message: 'Gasto creado correctamente',
-      data: gasto
+      message: "Gasto creado correctamente",
+      data: gasto,
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Error al crear gasto',
-      error: error.message
+      message: "Error al crear gasto",
+      error: error.message,
     });
   }
 };
 
 const getExpenses = async (req, res) => {
   try {
-    const filtros = {};
+    const usuario_id = req.usuario.usuario_id;
 
-    if (req.query.usuario_id) {
-      filtros.usuario_id = req.query.usuario_id;
-    }
+    const filtros = {
+      usuario_id,
+    };
 
     if (req.query.categoria_id) {
       filtros.categoria_id = req.query.categoria_id;
@@ -130,15 +120,13 @@ const getExpenses = async (req, res) => {
       }
     }
 
-    const gastos = await Gasto.find(filtros).sort({
-      fecha: -1
-    });
+    const gastos = await Gasto.find(filtros).sort({ fecha: -1 });
 
     res.status(200).json(gastos);
   } catch (error) {
     res.status(500).json({
-      message: 'Error al obtener gastos',
-      error: error.message
+      message: "Error al obtener gastos",
+      error: error.message,
     });
   }
 };
@@ -146,6 +134,9 @@ const getExpenses = async (req, res) => {
 const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
+    const usuario_id = req.usuario.usuario_id;
+
+    delete req.body.usuario_id;
 
     if (req.body.monto !== undefined) {
       req.body.monto = Number(req.body.monto);
@@ -153,53 +144,57 @@ const updateExpense = async (req, res) => {
 
     if (req.body.cuenta_id) {
       const accountExists = await Cuenta.findOne({
-        cuenta_id: req.body.cuenta_id
+        cuenta_id: req.body.cuenta_id,
+        usuario_id,
       });
 
       if (!accountExists) {
         return res.status(400).json({
-          message: 'Cuenta no existe'
+          message: "Cuenta no existe para este usuario",
         });
       }
-    } else if (req.body.cuenta_id === '' || req.body.cuenta_id === undefined) {
+    } else if (req.body.cuenta_id === "" || req.body.cuenta_id === undefined) {
       req.body.cuenta_id = null;
     }
 
     if (req.body.categoria_id) {
       const categoryExists = await Categoria.findOne({
-        categoria_id: req.body.categoria_id
+        categoria_id: req.body.categoria_id,
       });
 
       if (!categoryExists) {
         return res.status(400).json({
-          message: 'Categoria no existe'
+          message: "Categoria no existe",
         });
       }
     }
 
-    const gasto = await Gasto.findByIdAndUpdate(
-      id,
+    const gasto = await Gasto.findOneAndUpdate(
+      {
+        _id: id,
+        usuario_id,
+      },
       req.body,
       {
         new: true,
-        runValidators: true
+        runValidators: true,
       }
     );
 
     if (!gasto) {
       return res.status(404).json({
-        message: 'Gasto no encontrado'
+        message: "Gasto no encontrado",
       });
     }
 
     res.status(200).json({
-      message: 'Gasto actualizado correctamente',
-      data: gasto
+      message: "Gasto actualizado correctamente",
+      data: gasto,
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Error al actualizar gasto',
-      error: error.message
+      message: "Error al actualizar gasto",
+      error: error.message,
     });
   }
 };
@@ -207,159 +202,148 @@ const updateExpense = async (req, res) => {
 const deleteExpense = async (req, res) => {
   try {
     const { id } = req.params;
+    const usuario_id = req.usuario.usuario_id;
 
-    const gasto = await Gasto.findByIdAndDelete(id);
+    const gasto = await Gasto.findOneAndDelete({
+      _id: id,
+      usuario_id,
+    });
 
     if (!gasto) {
       return res.status(404).json({
-        message: 'Gasto no encontrado'
+        message: "Gasto no encontrado",
       });
     }
 
     res.status(200).json({
-      message: 'Gasto eliminado correctamente'
+      message: "Gasto eliminado correctamente",
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Error al eliminar gasto',
-      error: error.message
+      message: "Error al eliminar gasto",
+      error: error.message,
     });
   }
 };
 
 const totalByUser = async (req, res) => {
   try {
+    const usuario_id = req.usuario.usuario_id;
+
     const data = await Gasto.aggregate([
+      { $match: { usuario_id } },
       {
         $group: {
-          _id: '$usuario_id',
-          total_gastado: {
-            $sum: '$monto'
-          }
-        }
-      }
+          _id: "$usuario_id",
+          total_gastado: { $sum: "$monto" },
+        },
+      },
     ]);
 
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({
-      message: 'Error',
-      error: error.message
+      message: "Error",
+      error: error.message,
     });
   }
 };
 
 const averageByCategory = async (req, res) => {
   try {
+    const usuario_id = req.usuario.usuario_id;
+
     const data = await Gasto.aggregate([
+      { $match: { usuario_id } },
       {
         $group: {
-          _id: '$categoria_id',
-          promedio: {
-            $avg: '$monto'
-          }
-        }
-      }
+          _id: "$categoria_id",
+          promedio: { $avg: "$monto" },
+        },
+      },
     ]);
 
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({
-      message: 'Error',
-      error: error.message
+      message: "Error",
+      error: error.message,
     });
   }
 };
 
 const highExpenses = async (req, res) => {
   try {
+    const usuario_id = req.usuario.usuario_id;
     const min = Number(req.query.min || 50);
 
     const data = await Gasto.find({
-      monto: { $gt: min }
-    }).sort({
-      monto: -1
-    });
+      usuario_id,
+      monto: { $gt: min },
+    }).sort({ monto: -1 });
 
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({
-      message: 'Error',
-      error: error.message
+      message: "Error",
+      error: error.message,
     });
   }
 };
 
 const generalReport = async (req, res) => {
   try {
+    const usuario_id = req.usuario.usuario_id;
+
     const data = await Gasto.aggregate([
+      { $match: { usuario_id } },
       {
         $group: {
-          _id: '$categoria_id',
-          total: {
-            $sum: '$monto'
-          },
-          cantidad: {
-            $sum: 1
-          }
-        }
-      }
+          _id: "$categoria_id",
+          total: { $sum: "$monto" },
+          cantidad: { $sum: 1 },
+        },
+      },
     ]);
 
     res.status(200).json(data);
   } catch (error) {
     res.status(500).json({
-      message: 'Error',
-      error: error.message
+      message: "Error",
+      error: error.message,
     });
   }
 };
 
 const unusualExpenses = async (req, res) => {
   try {
-    const { usuario_id } = req.query;
-
-    if (!usuario_id) {
-      return res.status(400).json({
-        message: 'usuario_id es obligatorio'
-      });
-    }
+    const usuario_id = req.usuario.usuario_id;
 
     const promedio = await Gasto.aggregate([
-      {
-        $match: {
-          usuario_id
-        }
-      },
+      { $match: { usuario_id } },
       {
         $group: {
           _id: null,
-          avg: {
-            $avg: '$monto'
-          }
-        }
-      }
+          avg: { $avg: "$monto" },
+        },
+      },
     ]);
 
     const avg = promedio[0]?.avg || 0;
 
     const gastosAltos = await Gasto.find({
       usuario_id,
-      monto: {
-        $gt: avg * 2
-      }
-    }).sort({
-      monto: -1
-    });
+      monto: { $gt: avg * 2 },
+    }).sort({ monto: -1 });
 
     res.status(200).json({
       promedio: Number(avg.toFixed(2)),
-      gastos_inusuales: gastosAltos
+      gastos_inusuales: gastosAltos,
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Error al obtener gastos inusuales',
-      error: error.message
+      message: "Error al obtener gastos inusuales",
+      error: error.message,
     });
   }
 };
@@ -373,5 +357,5 @@ module.exports = {
   averageByCategory,
   highExpenses,
   generalReport,
-  unusualExpenses
+  unusualExpenses,
 };

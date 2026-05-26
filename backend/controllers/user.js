@@ -1,11 +1,12 @@
 const Usuario = require('../models/UserModel');
+const bcrypt = require('bcryptjs');
 
 const addUser = async (req, res) => {
   try {
-    const { usuario_id, nombre, email, ciudad, fecha_registro } = req.body;
+    const { usuario_id, nombre, email, password, ciudad, fecha_registro } = req.body;
 
-    if (!usuario_id || !nombre || !email || !ciudad || !fecha_registro) {
-      return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+    if (!usuario_id || !nombre || !email || !password || !ciudad) {
+      return res.status(400).json({ message: 'usuario_id, nombre, email, password y ciudad son obligatorios' });
     }
 
     const existsUserId = await Usuario.findOne({ usuario_id });
@@ -18,17 +19,23 @@ const addUser = async (req, res) => {
       return res.status(400).json({ message: 'El email ya existe' });
     }
 
+    const passwordHash = await bcrypt.hash(password, 10);
+
     const usuario = new Usuario({
       usuario_id,
       nombre,
       email,
+      password: passwordHash,
       ciudad,
-      fecha_registro
+      fecha_registro: fecha_registro || new Date()
     });
 
     await usuario.save();
 
-    res.status(201).json({ message: 'Usuario creado correctamente', data: usuario });
+    const usuarioSafe = usuario.toObject();
+    delete usuarioSafe.password;
+
+    res.status(201).json({ message: 'Usuario creado correctamente', data: usuarioSafe });
   } catch (error) {
     res.status(500).json({ message: 'Error al crear usuario', error: error.message });
   }
@@ -61,6 +68,10 @@ const getUserByUsuarioId = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.body.password) {
+      req.body.password = await bcrypt.hash(req.body.password, 10);
+    }
 
     const usuario = await Usuario.findByIdAndUpdate(id, req.body, { new: true });
 

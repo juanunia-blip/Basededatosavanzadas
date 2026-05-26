@@ -1,7 +1,26 @@
 const router = require('express').Router();
-const { balanceAlert, financialStatus } = require('../controllers/report');
 
-router.get('/balance-alert', balanceAlert);
-router.get('/financial-status', financialStatus);
+const { protect } = require('../middleware/auth');
+
+const {
+  balanceAlert,
+  financialStatus
+} = require('../controllers/report');
+
+/* =========================
+   REPORTES FINANCIEROS
+========================= */
+
+router.get(
+  '/balance-alert',
+  protect,
+  balanceAlert
+);
+
+router.get(
+  '/financial-status',
+  protect,
+  financialStatus
+);
 
 module.exports = router;

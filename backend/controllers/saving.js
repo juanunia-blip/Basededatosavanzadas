@@ -1,42 +1,44 @@
 const Ahorro = require('../models/SavingModel');
-const Usuario = require('../models/UserModel');
 
 const addSaving = async (req, res) => {
   try {
+
+    const usuario_id = req.usuario.usuario_id;
+
     let {
       ahorro_id,
-      usuario_id,
       meta,
       monto_objetivo,
       monto_actual
     } = req.body;
 
-    if (!usuario_id || !meta || monto_objetivo === undefined) {
+    if (!meta || monto_objetivo === undefined) {
       return res.status(400).json({
-        message: 'usuario_id, meta y monto_objetivo son obligatorios'
+        message: 'meta y monto_objetivo son obligatorios'
       });
     }
 
     monto_objetivo = Number(monto_objetivo);
+
     monto_actual = Number(monto_actual || 0);
 
-    if (isNaN(monto_objetivo) || monto_objetivo <= 0) {
+    if (
+      isNaN(monto_objetivo) ||
+      monto_objetivo <= 0
+    ) {
       return res.status(400).json({
-        message: 'El monto objetivo debe ser mayor que cero'
+        message:
+          'El monto objetivo debe ser mayor que cero'
       });
     }
 
-    if (isNaN(monto_actual) || monto_actual < 0) {
+    if (
+      isNaN(monto_actual) ||
+      monto_actual < 0
+    ) {
       return res.status(400).json({
-        message: 'El monto actual no puede ser negativo'
-      });
-    }
-
-    const userExists = await Usuario.findOne({ usuario_id });
-
-    if (!userExists) {
-      return res.status(400).json({
-        message: 'Usuario no existe'
+        message:
+          'El monto actual no puede ser negativo'
       });
     }
 
@@ -44,7 +46,10 @@ const addSaving = async (req, res) => {
       ahorro_id = `A${Date.now()}`;
     }
 
-    const exists = await Ahorro.findOne({ ahorro_id });
+    const exists = await Ahorro.findOne({
+      ahorro_id,
+      usuario_id
+    });
 
     if (exists) {
       return res.status(400).json({
@@ -63,7 +68,8 @@ const addSaving = async (req, res) => {
     await ahorro.save();
 
     res.status(201).json({
-      message: 'Meta de ahorro creada correctamente',
+      message:
+        'Meta de ahorro creada correctamente',
       data: ahorro
     });
 
@@ -77,15 +83,15 @@ const addSaving = async (req, res) => {
 
 const getSavings = async (req, res) => {
   try {
-    const filtros = {};
 
-    if (req.query.usuario_id) {
-      filtros.usuario_id = req.query.usuario_id;
-    }
+    const filtros = {
+      usuario_id: req.usuario.usuario_id
+    };
 
-    const ahorros = await Ahorro.find(filtros).sort({
-      createdAt: -1
-    });
+    const ahorros = await Ahorro.find(filtros)
+      .sort({
+        createdAt: -1
+      });
 
     res.status(200).json(ahorros);
 
@@ -99,18 +105,28 @@ const getSavings = async (req, res) => {
 
 const updateSaving = async (req, res) => {
   try {
+
     const { id } = req.params;
 
+    delete req.body.usuario_id;
+
     if (req.body.monto_objetivo !== undefined) {
-      req.body.monto_objetivo = Number(req.body.monto_objetivo);
+      req.body.monto_objetivo = Number(
+        req.body.monto_objetivo
+      );
     }
 
     if (req.body.monto_actual !== undefined) {
-      req.body.monto_actual = Number(req.body.monto_actual);
+      req.body.monto_actual = Number(
+        req.body.monto_actual
+      );
     }
 
-    const ahorro = await Ahorro.findByIdAndUpdate(
-      id,
+    const ahorro = await Ahorro.findOneAndUpdate(
+      {
+        _id: id,
+        usuario_id: req.usuario.usuario_id
+      },
       req.body,
       {
         new: true,
@@ -125,7 +141,8 @@ const updateSaving = async (req, res) => {
     }
 
     res.status(200).json({
-      message: 'Ahorro actualizado correctamente',
+      message:
+        'Ahorro actualizado correctamente',
       data: ahorro
     });
 
@@ -139,9 +156,13 @@ const updateSaving = async (req, res) => {
 
 const deleteSaving = async (req, res) => {
   try {
+
     const { id } = req.params;
 
-    const ahorro = await Ahorro.findByIdAndDelete(id);
+    const ahorro = await Ahorro.findOneAndDelete({
+      _id: id,
+      usuario_id: req.usuario.usuario_id
+    });
 
     if (!ahorro) {
       return res.status(404).json({
@@ -150,7 +171,8 @@ const deleteSaving = async (req, res) => {
     }
 
     res.status(200).json({
-      message: 'Ahorro eliminado correctamente'
+      message:
+        'Ahorro eliminado correctamente'
     });
 
   } catch (error) {
@@ -163,15 +185,12 @@ const deleteSaving = async (req, res) => {
 
 const savingProgress = async (req, res) => {
   try {
-    const { usuario_id } = req.query;
 
-    const filtros = {};
+    const usuario_id = req.usuario.usuario_id;
 
-    if (usuario_id) {
-      filtros.usuario_id = usuario_id;
-    }
-
-    const ahorros = await Ahorro.find(filtros);
+    const ahorros = await Ahorro.find({
+      usuario_id
+    });
 
     const resultado = ahorros.map(item => ({
       ahorro_id: item.ahorro_id,
@@ -179,12 +198,15 @@ const savingProgress = async (req, res) => {
       meta: item.meta,
       monto_objetivo: item.monto_objetivo,
       monto_actual: item.monto_actual,
+
       porcentaje:
         item.monto_objetivo > 0
           ? Number(
               (
-                (item.monto_actual / item.monto_objetivo) *
-                100
+                (
+                  item.monto_actual /
+                  item.monto_objetivo
+                ) * 100
               ).toFixed(2)
             )
           : 0
@@ -194,7 +216,8 @@ const savingProgress = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({
-      message: 'Error al obtener progreso de ahorro',
+      message:
+        'Error al obtener progreso de ahorro',
       error: error.message
     });
   }
@@ -202,39 +225,49 @@ const savingProgress = async (req, res) => {
 
 const savingAlert = async (req, res) => {
   try {
-    const { usuario_id } = req.query;
 
-    if (!usuario_id) {
-      return res.status(400).json({
-        message: 'usuario_id es obligatorio'
-      });
-    }
+    const usuario_id = req.usuario.usuario_id;
 
     const ahorros = await Ahorro.find({
       usuario_id
     });
 
     const resultados = ahorros.map(a => {
+
       const progreso =
         a.monto_objetivo > 0
-          ? (a.monto_actual / a.monto_objetivo) * 100
+          ? (
+              a.monto_actual /
+              a.monto_objetivo
+            ) * 100
           : 0;
 
       let nivel = 'ok';
+
       let mensaje = 'Buen progreso';
 
       if (progreso < 30) {
+
         nivel = 'warning';
-        mensaje = `Bajo progreso en meta: ${a.meta}`;
+
+        mensaje =
+          `Bajo progreso en meta: ${a.meta}`;
+
       } else if (progreso >= 100) {
+
         nivel = 'success';
-        mensaje = `Meta alcanzada: ${a.meta}`;
+
+        mensaje =
+          `Meta alcanzada: ${a.meta}`;
       }
 
       return {
         ahorro_id: a.ahorro_id,
         meta: a.meta,
-        progreso: Number(progreso.toFixed(2)),
+
+        progreso:
+          Number(progreso.toFixed(2)),
+
         nivel,
         mensaje
       };
@@ -244,7 +277,8 @@ const savingAlert = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({
-      message: 'Error al obtener alerta de ahorro',
+      message:
+        'Error al obtener alerta de ahorro',
       error: error.message
     });
   }

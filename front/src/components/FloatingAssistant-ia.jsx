@@ -70,7 +70,7 @@ export default function FloatingAssistant({
       setLoading(true);
 
       const response = await askAI({
-        usuario_id: "U001",
+        
         question: finalQuestion,
         history: messages,
       });

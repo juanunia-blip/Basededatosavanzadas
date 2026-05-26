@@ -1,5 +1,7 @@
 const router = require("express").Router();
 
+const { protect } = require("../middleware/auth");
+
 const {
   getAccounts,
   addAccount,
@@ -7,16 +9,36 @@ const {
   deleteAccount,
 } = require("../controllers/account");
 
+/* =========================
+   ACCOUNTS
+========================= */
+
 // Obtener cuentas
-router.get("/get-accounts", getAccounts);
+router.get(
+  "/get-accounts",
+  protect,
+  getAccounts
+);
 
 // Crear cuenta
-router.post("/add-account", addAccount);
+router.post(
+  "/add-account",
+  protect,
+  addAccount
+);
 
 // Actualizar cuenta
-router.put("/update-account/:id", updateAccount);
+router.put(
+  "/update-account/:id",
+  protect,
+  updateAccount
+);
 
 // Eliminar cuenta
-router.delete("/delete-account/:id", deleteAccount);
+router.delete(
+  "/delete-account/:id",
+  protect,
+  deleteAccount
+);
 
 module.exports = router;
