@@ -6,6 +6,7 @@ const {
   createBusiness,
   getBusinesses,
   getBusinessById,
+  getBusinessReports,
   updateBusiness,
   deleteBusiness,
 
@@ -227,6 +228,11 @@ router.delete(
   "/businesses/:businessId/sales/:saleId",
   protect,
   deleteBusinessSale
+);
+router.get(
+  "/businesses/:businessId/reports",
+  protect,
+  getBusinessReports
 );
 
 module.exports = router;

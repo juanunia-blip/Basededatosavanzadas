@@ -35,6 +35,7 @@ app.use('/api/v1', aiRoutes);
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", businessRoutes);
 
+
 app.use((req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });
 });

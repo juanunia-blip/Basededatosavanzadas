@@ -445,3 +445,9 @@ export const getBusinessUnsettledProductions = async (businessId, params = {}) =
   );
   return response.data;
 };
+
+export const getBusinessReports = async (businessId) => {
+  const { data } = await api.get(`/businesses/${businessId}/reports`);
+  return data;
+};
+

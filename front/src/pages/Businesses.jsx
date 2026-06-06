@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   MapPin,
@@ -24,12 +24,14 @@ import {
   Eye,
   CalendarDays,
   FileText,
+  Download,
 } from "lucide-react";
 
 import {
   getBusinesses,
   createBusiness,
   getBusinessSummary,
+  getBusinessReports,
 
   getBusinessWorkers,
   createBusinessWorker,
@@ -79,6 +81,8 @@ const formatDate = (date) => {
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 
+const KG_PER_LOAD = 125;
+
 const expenseTypes = [
   "abono",
   "transporte",
@@ -89,6 +93,64 @@ const expenseTypes = [
   "servicios",
   "otro",
 ];
+
+const fieldClass =
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100";
+
+const selectClass =
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100";
+
+const textareaClass =
+  "min-h-24 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100";
+
+const labelClass = "mb-2 block text-sm font-semibold text-slate-700";
+
+const helperTextClass = "mt-2 text-xs text-slate-500";
+
+
+const sanitizeFileName = (value) =>
+  String(value || "reporte")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+
+const downloadCSV = (filename, rows) => {
+  if (!rows || rows.length === 0) {
+    alert("No hay datos para exportar");
+    return;
+  }
+
+  const headers = Object.keys(rows[0]);
+
+  const csvContent = [
+    headers.join(";"),
+    ...rows.map((row) =>
+      headers
+        .map((header) => {
+          const value = row[header] ?? "";
+          return `"${String(value).replace(/"/g, '""')}"`;
+        })
+        .join(";")
+    ),
+  ].join("\n");
+
+  const blob = new Blob(["\uFEFF" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 
 export default function Businesses() {
   const [search, setSearch] = useState("");
@@ -112,6 +174,7 @@ export default function Businesses() {
     totalVentas: 0,
     totalGastos: 0,
     totalPagoTrabajadores: 0,
+    totalGastosConTrabajadores: 0,
     totalAbonado: 0,
     totalPendiente: 0,
     totalKilosSinLiquidar: 0,
@@ -319,8 +382,9 @@ export default function Businesses() {
 
             const ingresos = Number(summary.totalVentas || 0);
             const gastos =
+              Number(summary.totalGastosConTrabajadores || 0) ||
               Number(summary.totalGastos || 0) +
-              Number(summary.totalPagoTrabajadores || 0);
+                Number(summary.totalPagoTrabajadores || 0);
             const utilidad = Number(summary.utilidadNeta || 0);
 
             return (
@@ -514,6 +578,9 @@ function BusinessDetail({
   const totalVentas = Number(summary?.totalVentas || 0);
   const totalGastos = Number(summary?.totalGastos || 0);
   const totalPagoTrabajadores = Number(summary?.totalPagoTrabajadores || 0);
+  const totalGastosConTrabajadores =
+    Number(summary?.totalGastosConTrabajadores || 0) ||
+    totalGastos + totalPagoTrabajadores;
   const totalAbonado = Number(summary?.totalAbonado || 0);
   const totalPendiente = Number(summary?.totalPendiente || 0);
   const totalKilosSinLiquidar = Number(summary?.totalKilosSinLiquidar || 0);
@@ -618,9 +685,16 @@ function BusinessDetail({
 
             <MetricCard
               icon={<Users size={24} />}
-              label="Liquidado trabajadores"
+              label="Pago trabajadores"
               value={formatMoney(totalPagoTrabajadores)}
               color="text-amber-600"
+            />
+
+            <MetricCard
+              icon={<Receipt size={24} />}
+              label="Total gastos negocio"
+              value={formatMoney(totalGastosConTrabajadores)}
+              color="text-red-600"
             />
 
             <MetricCard
@@ -724,6 +798,7 @@ function BusinessDetail({
       {activeTab === "gastos" && (
         <BusinessExpenses
           business={business}
+          summary={summary}
           onRefreshSummary={onRefreshSummary}
           quickAction={quickAction}
           onQuickActionDone={clearQuickAction}
@@ -748,17 +823,7 @@ function BusinessDetail({
       )}
 
       {activeTab === "reportes" && (
-        <section className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <Building2 size={46} className="mx-auto mb-4 text-slate-300" />
-
-          <h2 className="text-2xl font-bold text-slate-950">
-            Reportes y exportaciones
-          </h2>
-
-          <p className="mt-2 text-slate-500">
-            Esta sección se conectará cuando configuremos reportes, Excel o CSV.
-          </p>
-        </section>
+        <BusinessReports business={business} />
       )}
     </div>
   );
@@ -780,10 +845,15 @@ function BusinessSales({
   const [form, setForm] = useState({
     producto: "",
     cantidad: "",
-    precio_unitario: "",
+    precio_carga: "",
     comprador: "",
     fecha: getToday(),
   });
+
+  const cantidadKg = Number(form.cantidad || 0);
+  const precioCarga = Number(form.precio_carga || 0);
+  const precioKiloCalculado = precioCarga > 0 ? precioCarga / KG_PER_LOAD : 0;
+  const totalVentaCalculado = cantidadKg * precioKiloCalculado;
 
   const loadSales = async () => {
     try {
@@ -813,7 +883,7 @@ function BusinessSales({
     setForm({
       producto: "",
       cantidad: "",
-      precio_unitario: "",
+      precio_carga: "",
       comprador: "",
       fecha: getToday(),
     });
@@ -823,10 +893,15 @@ function BusinessSales({
   const openEditModal = (sale) => {
     setEditingSale(sale);
 
+    const precioKiloGuardado = Number(
+      sale.precio_unitario || sale.precio_kilo || 0
+    );
+
     setForm({
       producto: sale.producto || "",
       cantidad: sale.cantidad || sale.kilos || "",
-      precio_unitario: sale.precio_unitario || sale.precio_kilo || "",
+      precio_carga:
+        sale.precio_carga || (precioKiloGuardado > 0 ? precioKiloGuardado * KG_PER_LOAD : ""),
       comprador: sale.comprador || "",
       fecha: sale.fecha
         ? new Date(sale.fecha).toISOString().slice(0, 10)
@@ -842,7 +917,7 @@ function BusinessSales({
     setForm({
       producto: "",
       cantidad: "",
-      precio_unitario: "",
+      precio_carga: "",
       comprador: "",
       fecha: getToday(),
     });
@@ -852,18 +927,22 @@ function BusinessSales({
     e.preventDefault();
 
     const cantidad = Number(form.cantidad || 0);
-    const precioUnitario = Number(form.precio_unitario || 0);
-    const totalVenta = cantidad * precioUnitario;
+    const precioCargaDia = Number(form.precio_carga || 0);
+    const precioKilo = precioCargaDia / KG_PER_LOAD;
+    const totalVenta = cantidad * precioKilo;
 
-    if (!form.producto || cantidad <= 0 || precioUnitario <= 0 || !form.fecha) {
-      alert("Producto, cantidad, precio y fecha son obligatorios");
+    if (!form.producto || cantidad <= 0 || precioCargaDia <= 0 || !form.fecha) {
+      alert("Producto, kilos vendidos, precio por carga y fecha son obligatorios");
       return;
     }
 
     const payload = {
       producto: form.producto,
       cantidad,
-      precio_unitario: precioUnitario,
+      kilos: cantidad,
+      precio_carga: precioCargaDia,
+      precio_unitario: precioKilo,
+      precio_kilo: precioKilo,
       total_venta: totalVenta,
       fecha: form.fecha,
       comprador: form.comprador,
@@ -929,8 +1008,8 @@ function BusinessSales({
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <TableHeader>Producto</TableHeader>
-              <TableHeader>Cantidad</TableHeader>
-              <TableHeader>Precio</TableHeader>
+              <TableHeader>Kilos vendidos</TableHeader>
+              <TableHeader>Precio kilo</TableHeader>
               <TableHeader>Total</TableHeader>
               <TableHeader>Cliente</TableHeader>
               <TableHeader>Fecha</TableHeader>
@@ -989,7 +1068,7 @@ function BusinessSales({
               })
             }
             placeholder="Producto o servicio"
-            className="input"
+            className={fieldClass}
             required
           />
 
@@ -1003,25 +1082,31 @@ function BusinessSales({
                 cantidad: e.target.value,
               })
             }
-            placeholder="Cantidad"
-            className="input"
+            placeholder="Kilos vendidos. Ej: 250"
+            className={fieldClass}
             required
           />
 
-          <input
-            type="number"
-            min="0"
-            value={form.precio_unitario}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                precio_unitario: e.target.value,
-              })
-            }
-            placeholder="Precio unitario"
-            className="input"
-            required
-          />
+          <div>
+            <input
+              type="number"
+              min="0"
+              value={form.precio_carga}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  precio_carga: e.target.value,
+                })
+              }
+              placeholder="Precio por Carga del día"
+              className={fieldClass}
+              required
+            />
+
+            <p className={helperTextClass}>
+              Precio por kilo calculado: {formatMoney(precioKiloCalculado)}
+            </p>
+          </div>
 
           <input
             value={form.comprador}
@@ -1032,11 +1117,11 @@ function BusinessSales({
               })
             }
             placeholder="Cliente o comprador"
-            className="input"
+            className={fieldClass}
           />
 
-          <input
-            type="date"
+          <DateInput
+            label="Fecha de venta"
             value={form.fecha}
             onChange={(e) =>
               setForm({
@@ -1044,13 +1129,12 @@ function BusinessSales({
                 fecha: e.target.value,
               })
             }
-            className="input"
             required
           />
 
           <TotalPreview
             label="Total venta"
-            value={Number(form.cantidad || 0) * Number(form.precio_unitario || 0)}
+            value={totalVentaCalculado}
           />
         </ModalShell>
       )}
@@ -1060,6 +1144,7 @@ function BusinessSales({
 
 function BusinessExpenses({
   business,
+  summary,
   onRefreshSummary,
   quickAction,
   onQuickActionDone,
@@ -1078,6 +1163,21 @@ function BusinessExpenses({
     monto: "",
     fecha: getToday(),
   });
+
+  const gastosOperativos = Number(summary?.totalGastos || 0);
+  const gastoTrabajadores = Number(summary?.totalPagoTrabajadores || 0);
+  const totalGastosNegocio =
+    Number(summary?.totalGastosConTrabajadores || 0) ||
+    gastosOperativos + gastoTrabajadores;
+
+  const workerExpenseRow = {
+    _id: "trabajadores-calculado",
+    tipo: "trabajadores",
+    descripcion: "Pago de trabajadores liquidado",
+    monto: gastoTrabajadores,
+    fecha: null,
+    calculated: true,
+  };
 
   const resetForm = () => {
     setForm({
@@ -1147,19 +1247,29 @@ function BusinessExpenses({
 
     const monto = Number(form.monto || 0);
 
-    const tipoFinal =
-      form.tipo === "personalizado"
-        ? form.tipo_personalizado.trim()
-        : form.tipo;
+    const tipoPersonalizado = form.tipo_personalizado.trim();
 
-    if (!tipoFinal || !form.descripcion || monto <= 0 || !form.fecha) {
+    const tipoFinal = form.tipo === "personalizado" ? "otro" : form.tipo;
+
+    const descripcionFinal =
+      form.tipo === "personalizado" && tipoPersonalizado
+        ? `${tipoPersonalizado} - ${form.descripcion}`
+        : form.descripcion;
+
+    if (
+      !tipoFinal ||
+      !descripcionFinal ||
+      monto <= 0 ||
+      !form.fecha ||
+      (form.tipo === "personalizado" && !tipoPersonalizado)
+    ) {
       alert("Tipo, descripción, monto y fecha son obligatorios");
       return;
     }
 
     const payload = {
       tipo: tipoFinal,
-      descripcion: form.descripcion,
+      descripcion: descripcionFinal,
       monto,
       fecha: form.fecha,
     };
@@ -1204,63 +1314,140 @@ function BusinessExpenses({
       <SectionHeader
         icon={<Receipt className="text-violet-600" size={24} />}
         title="Gastos del negocio"
-        description="Registra costos, compras, transporte, insumos y demás salidas."
+        description="Registra costos operativos y revisa el pago calculado de trabajadores."
         buttonText="Nuevo gasto"
         onClick={openCreateModal}
       />
 
       {loading ? (
         <LoadingCard text="Cargando gastos..." />
-      ) : expenses.length === 0 ? (
-        <EmptyState
-          icon={<Receipt size={52} />}
-          title="No hay gastos registrados"
-          text="Agrega gastos para calcular correctamente la utilidad del negocio."
-          buttonText="Nuevo gasto"
-          onClick={openCreateModal}
-        />
       ) : (
-        <DataTable>
-          <thead className="border-b border-slate-200 bg-slate-50">
-            <tr>
-              <TableHeader>Tipo</TableHeader>
-              <TableHeader>Descripción</TableHeader>
-              <TableHeader>Monto</TableHeader>
-              <TableHeader>Fecha</TableHeader>
-              <TableHeader align="right">Acciones</TableHeader>
-            </tr>
-          </thead>
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <p className="text-sm font-semibold text-slate-500">
+                Gastos operativos
+              </p>
 
-          <tbody>
-            {expenses.map((expense) => (
-              <tr
-                key={expense._id}
-                className="border-b border-slate-100 last:border-b-0"
-              >
-                <TableCell>
-                  <span className="inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold capitalize text-violet-700">
-                    {expense.tipo}
-                  </span>
-                </TableCell>
+              <p className="mt-2 text-2xl font-bold text-red-600">
+                {formatMoney(gastosOperativos)}
+              </p>
 
-                <TableCell strong>{expense.descripcion}</TableCell>
+              <p className="mt-1 text-xs text-slate-400">
+                Gastos creados manualmente.
+              </p>
+            </div>
 
-                <TableCell className="font-bold text-red-600">
-                  {formatMoney(expense.monto)}
-                </TableCell>
+            <div className="rounded-3xl border border-amber-100 bg-amber-50 p-5 shadow-sm">
+              <p className="text-sm font-semibold text-amber-700">
+                Trabajadores
+              </p>
 
-                <TableCell>{formatDate(expense.fecha)}</TableCell>
+              <p className="mt-2 text-2xl font-bold text-amber-700">
+                {formatMoney(gastoTrabajadores)}
+              </p>
 
-                <td className="px-6 py-4">
-                  <ActionButtons
-                    onEdit={() => openEditModal(expense)}
-                    onDelete={() => handleDelete(expense)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </DataTable>
+              <p className="mt-1 text-xs text-amber-700/70">
+                Suma de abonos y liquidaciones pagadas.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-red-100 bg-red-50 p-5 shadow-sm">
+              <p className="text-sm font-semibold text-red-700">
+                Total gastos del negocio
+              </p>
+
+              <p className="mt-2 text-2xl font-bold text-red-700">
+                {formatMoney(totalGastosNegocio)}
+              </p>
+
+              <p className="mt-1 text-xs text-red-700/70">
+                Operativos + trabajadores.
+              </p>
+            </div>
+          </div>
+
+          {expenses.length === 0 && gastoTrabajadores <= 0 ? (
+            <EmptyState
+              icon={<Receipt size={52} />}
+              title="No hay gastos registrados"
+              text="Agrega gastos o crea liquidaciones para calcular correctamente la utilidad del negocio."
+              buttonText="Nuevo gasto"
+              onClick={openCreateModal}
+            />
+          ) : (
+            <DataTable>
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <TableHeader>Tipo</TableHeader>
+                  <TableHeader>Descripción</TableHeader>
+                  <TableHeader>Monto</TableHeader>
+                  <TableHeader>Fecha</TableHeader>
+                  <TableHeader align="right">Acciones</TableHeader>
+                </tr>
+              </thead>
+
+              <tbody>
+                {gastoTrabajadores > 0 && (
+                  <tr className="border-b border-amber-100 bg-amber-50/50">
+                    <TableCell>
+                      <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold capitalize text-amber-700">
+                        trabajadores
+                      </span>
+                    </TableCell>
+
+                    <TableCell strong>
+                      <div>
+                        <p>Pago de trabajadores liquidado</p>
+                        <p className="mt-1 text-xs font-normal text-slate-500">
+                          Registro calculado automáticamente desde liquidaciones abonadas o pagadas.
+                        </p>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="font-bold text-red-600">
+                      {formatMoney(workerExpenseRow.monto)}
+                    </TableCell>
+
+                    <TableCell>Calculado</TableCell>
+
+                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-400">
+                      Automático
+                    </td>
+                  </tr>
+                )}
+
+                {expenses.map((expense) => (
+                  <tr
+                    key={expense._id}
+                    className="border-b border-slate-100 last:border-b-0"
+                  >
+                    <TableCell>
+                      <span className="inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold capitalize text-violet-700">
+                        {expense.tipo}
+                      </span>
+                    </TableCell>
+
+                    <TableCell strong>{expense.descripcion}</TableCell>
+
+                    <TableCell className="font-bold text-red-600">
+                      {formatMoney(expense.monto)}
+                    </TableCell>
+
+                    <TableCell>{formatDate(expense.fecha)}</TableCell>
+
+                    <td className="px-6 py-4">
+                      <ActionButtons
+                        onEdit={() => openEditModal(expense)}
+                        onDelete={() => handleDelete(expense)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+          )}
+        </>
       )}
 
       {modalOpen && (
@@ -1280,7 +1467,7 @@ function BusinessExpenses({
                 tipo: e.target.value,
               })
             }
-            className="input"
+            className={selectClass}
           >
             <option value="abono">Abono</option>
             <option value="transporte">Transporte</option>
@@ -1303,7 +1490,7 @@ function BusinessExpenses({
                 })
               }
               placeholder="Escribe el tipo de gasto. Ej: fertilizante, arriendo, publicidad"
-              className="input"
+              className={fieldClass}
               required
             />
           )}
@@ -1317,7 +1504,7 @@ function BusinessExpenses({
               })
             }
             placeholder="Descripción"
-            className="input"
+            className={fieldClass}
             required
           />
 
@@ -1332,12 +1519,12 @@ function BusinessExpenses({
               })
             }
             placeholder="Monto"
-            className="input"
+            className={fieldClass}
             required
           />
 
-          <input
-            type="date"
+          <DateInput
+            label="Fecha del gasto"
             value={form.fecha}
             onChange={(e) =>
               setForm({
@@ -1345,7 +1532,6 @@ function BusinessExpenses({
                 fecha: e.target.value,
               })
             }
-            className="input"
             required
           />
         </ModalShell>
@@ -1416,6 +1602,76 @@ function BusinessProductions({
           price: "Precio unitario",
           worker: "Persona",
         };
+
+  const getIdValue = (value) => {
+    if (!value) return "";
+    if (typeof value === "object") return value._id || "";
+    return value;
+  };
+
+  const getDateOnly = (value) => {
+    if (!value) return "";
+    return new Date(value).toISOString().slice(0, 10);
+  };
+
+  const selectedSettlementWorker = useMemo(() => {
+    return workers.find((worker) => worker._id === settlementForm.trabajador_id);
+  }, [workers, settlementForm.trabajador_id]);
+
+  const settlementPreview = useMemo(() => {
+    if (
+      !settlementForm.trabajador_id ||
+      !settlementForm.fecha_inicio ||
+      !settlementForm.fecha_fin
+    ) {
+      return {
+        items: [],
+        totalKilos: 0,
+        totalPago: 0,
+        precioPromedio: 0,
+        abonado: Number(settlementForm.abonado || 0),
+        pendiente: 0,
+      };
+    }
+
+    const items = unsettledProductions.filter((production) => {
+      const workerId = getIdValue(production.trabajador_id);
+      const productionDate = getDateOnly(production.fecha);
+
+      return (
+        workerId === settlementForm.trabajador_id &&
+        productionDate >= settlementForm.fecha_inicio &&
+        productionDate <= settlementForm.fecha_fin
+      );
+    });
+
+    const totalKilos = items.reduce(
+      (sum, item) => sum + Number(item.kilos || 0),
+      0
+    );
+
+    const totalPago = items.reduce(
+      (sum, item) => sum + Number(item.total_pago || 0),
+      0
+    );
+
+    const abonado = Number(settlementForm.abonado || 0);
+
+    return {
+      items,
+      totalKilos,
+      totalPago,
+      precioPromedio: totalKilos > 0 ? totalPago / totalKilos : 0,
+      abonado,
+      pendiente: Math.max(totalPago - abonado, 0),
+    };
+  }, [
+    unsettledProductions,
+    settlementForm.trabajador_id,
+    settlementForm.fecha_inicio,
+    settlementForm.fecha_fin,
+    settlementForm.abonado,
+  ]);
 
   const loadData = async () => {
     try {
@@ -1602,7 +1858,24 @@ function BusinessProductions({
       !settlementForm.fecha_inicio ||
       !settlementForm.fecha_fin
     ) {
-      alert("Trabajador, fecha inicio y fecha fin son obligatorios");
+      alert("Persona, fecha inicial y fecha final son obligatorias");
+      return;
+    }
+
+    if (settlementForm.fecha_fin < settlementForm.fecha_inicio) {
+      alert("La fecha final no puede ser menor que la fecha inicial");
+      return;
+    }
+
+    if (settlementPreview.items.length === 0) {
+      alert(
+        "No hay producción sin liquidar para esta persona dentro del rango seleccionado"
+      );
+      return;
+    }
+
+    if (Number(settlementForm.abonado || 0) > settlementPreview.totalPago) {
+      alert("El abono inicial no puede ser mayor que el total a pagar");
       return;
     }
 
@@ -2073,80 +2346,94 @@ function BusinessProductions({
           onSubmit={handleProductionSubmit}
           saving={saving}
           submitText={editingProduction ? "Guardar cambios" : "Guardar registro"}
+          maxWidth="max-w-2xl"
         >
-          <select
-            value={productionForm.trabajador_id}
-            onChange={(e) =>
-              setProductionForm({
-                ...productionForm,
-                trabajador_id: e.target.value,
-              })
-            }
-            className="input"
-            required
-          >
-            <option value="">Selecciona persona</option>
-            {workers.map((worker) => (
-              <option key={worker._id} value={worker._id}>
-                {worker.nombre}
-              </option>
-            ))}
-          </select>
+          <div className="rounded-3xl border border-violet-100 bg-violet-50 p-4">
+            <p className="text-sm font-semibold text-violet-700">
+              Registro diario
+            </p>
 
-          <input
-            type="date"
-            value={productionForm.fecha}
-            onChange={(e) =>
-              setProductionForm({
-                ...productionForm,
-                fecha: e.target.value,
-              })
-            }
-            className="input"
-            required
-          />
+            <p className="mt-1 text-sm text-violet-700/80">
+              Este valor queda pendiente hasta que crees una liquidación.
+            </p>
+          </div>
 
-          <input
-            type="number"
-            min="0"
-            value={productionForm.kilos}
-            onChange={(e) =>
-              setProductionForm({
-                ...productionForm,
-                kilos: e.target.value,
-              })
-            }
-            placeholder={labels.quantity}
-            className="input"
-            required
-          />
+          <div>
+            <label className={labelClass}>{labels.worker}</label>
 
-          <input
-            type="number"
-            min="0"
-            value={productionForm.precio_kilo}
-            onChange={(e) =>
-              setProductionForm({
-                ...productionForm,
-                precio_kilo: e.target.value,
-              })
-            }
-            placeholder={labels.price}
-            className="input"
-            required
-          />
+            <select
+              value={productionForm.trabajador_id}
+              onChange={(e) =>
+                setProductionForm({
+                  ...productionForm,
+                  trabajador_id: e.target.value,
+                })
+              }
+              className={selectClass}
+              required
+            >
+              <option value="">Selecciona persona</option>
 
-          <textarea
-            value={productionForm.observacion}
-            onChange={(e) =>
-              setProductionForm({
-                ...productionForm,
-                observacion: e.target.value,
-              })
-            }
-            placeholder="Observación"
-            className="input min-h-24"
-          />
+              {workers.map((worker) => (
+                <option key={worker._id} value={worker._id}>
+                  {worker.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <DateInput
+              label="Fecha"
+              value={productionForm.fecha}
+              onChange={(e) =>
+                setProductionForm({
+                  ...productionForm,
+                  fecha: e.target.value,
+                })
+              }
+              required
+              helperText="Toca el campo o el ícono para abrir el calendario."
+            />
+
+            <div>
+              <label className={labelClass}>{labels.quantity}</label>
+
+              <input
+                type="number"
+                min="0"
+                value={productionForm.kilos}
+                onChange={(e) =>
+                  setProductionForm({
+                    ...productionForm,
+                    kilos: e.target.value,
+                  })
+                }
+                placeholder={`Ej: ${business.tipo === "finca" ? "120" : "3"}`}
+                className={fieldClass}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>{labels.price}</label>
+
+            <input
+              type="number"
+              min="0"
+              value={productionForm.precio_kilo}
+              onChange={(e) =>
+                setProductionForm({
+                  ...productionForm,
+                  precio_kilo: e.target.value,
+                })
+              }
+              placeholder={`Ej: ${business.tipo === "finca" ? "800" : "25000"}`}
+              className={fieldClass}
+              required
+            />
+          </div>
 
           <TotalPreview
             label="Total del día"
@@ -2155,56 +2442,84 @@ function BusinessProductions({
               Number(productionForm.precio_kilo || 0)
             }
           />
+
+          <div>
+            <label className={labelClass}>Observación opcional</label>
+
+            <textarea
+              value={productionForm.observacion}
+              onChange={(e) =>
+                setProductionForm({
+                  ...productionForm,
+                  observacion: e.target.value,
+                })
+              }
+              placeholder="Ej: buen rendimiento, jornada completa, pendiente por revisar..."
+              className={textareaClass}
+            />
+          </div>
         </ModalShell>
       )}
 
       {settlementModalOpen && (
         <ModalShell
           title="Crear liquidación"
-          description="Agrupa producción diaria de una persona en un periodo."
+          description="Selecciona una persona y un periodo. Antes de guardar verás qué días entrarán en la liquidación."
           onClose={closeSettlementModal}
           onSubmit={handleSettlementSubmit}
           saving={saving}
           submitText="Crear liquidación"
+          maxWidth="max-w-3xl"
         >
-          <select
-            value={settlementForm.trabajador_id}
-            onChange={(e) =>
-              setSettlementForm({
-                ...settlementForm,
-                trabajador_id: e.target.value,
-              })
-            }
-            className="input"
-            required
-          >
-            <option value="">Selecciona persona</option>
-            {workers.map((worker) => (
-              <option key={worker._id} value={worker._id}>
-                {worker.nombre}
-              </option>
-            ))}
-          </select>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelClass}>{labels.worker}</label>
 
-          <select
-            value={settlementForm.periodo}
-            onChange={(e) =>
-              setSettlementForm({
-                ...settlementForm,
-                periodo: e.target.value,
-              })
-            }
-            className="input"
-          >
-            <option value="semana">Semana</option>
-            <option value="quincena">Quincena</option>
-            <option value="mes">Mes</option>
-            <option value="personalizado">Personalizado</option>
-          </select>
+              <select
+                value={settlementForm.trabajador_id}
+                onChange={(e) =>
+                  setSettlementForm({
+                    ...settlementForm,
+                    trabajador_id: e.target.value,
+                  })
+                }
+                className={selectClass}
+                required
+              >
+                <option value="">Selecciona persona</option>
+
+                {workers.map((worker) => (
+                  <option key={worker._id} value={worker._id}>
+                    {worker.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Tipo de periodo</label>
+
+              <select
+                value={settlementForm.periodo}
+                onChange={(e) =>
+                  setSettlementForm({
+                    ...settlementForm,
+                    periodo: e.target.value,
+                  })
+                }
+                className={selectClass}
+              >
+                <option value="semana">Semana</option>
+                <option value="quincena">Quincena</option>
+                <option value="mes">Mes</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+            </div>
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <input
-              type="date"
+            <DateInput
+              label="Desde"
               value={settlementForm.fecha_inicio}
               onChange={(e) =>
                 setSettlementForm({
@@ -2212,12 +2527,11 @@ function BusinessProductions({
                   fecha_inicio: e.target.value,
                 })
               }
-              className="input"
               required
             />
 
-            <input
-              type="date"
+            <DateInput
+              label="Hasta"
               value={settlementForm.fecha_fin}
               onChange={(e) =>
                 setSettlementForm({
@@ -2225,40 +2539,142 @@ function BusinessProductions({
                   fecha_fin: e.target.value,
                 })
               }
-              className="input"
               required
             />
           </div>
 
-          <input
-            type="number"
-            min="0"
-            value={settlementForm.abonado}
-            onChange={(e) =>
-              setSettlementForm({
-                ...settlementForm,
-                abonado: e.target.value,
-              })
-            }
-            placeholder="Abono inicial opcional"
-            className="input"
-          />
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-500">
+                  Vista previa
+                </p>
 
-          <textarea
-            value={settlementForm.observacion}
-            onChange={(e) =>
-              setSettlementForm({
-                ...settlementForm,
-                observacion: e.target.value,
-              })
-            }
-            placeholder="Observación"
-            className="input min-h-24"
-          />
+                <h3 className="text-xl font-bold text-slate-950">
+                  {selectedSettlementWorker?.nombre || "Selecciona una persona"}
+                </h3>
+              </div>
+
+              <span className="w-fit rounded-full bg-violet-100 px-3 py-1 text-xs font-bold text-violet-700">
+                {settlementPreview.items.length} registros incluidos
+              </span>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase text-slate-400">
+                  {labels.quantity}
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-slate-950">
+                  {settlementPreview.totalKilos}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase text-slate-400">
+                  Precio promedio
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-blue-600">
+                  {formatMoney(settlementPreview.precioPromedio)}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase text-slate-400">
+                  Total a pagar
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-emerald-600">
+                  {formatMoney(settlementPreview.totalPago)}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase text-slate-400">
+                  Pendiente
+                </p>
+
+                <p className="mt-1 text-xl font-bold text-orange-600">
+                  {formatMoney(settlementPreview.pendiente)}
+                </p>
+              </div>
+            </div>
+
+            {settlementForm.trabajador_id &&
+              settlementPreview.items.length === 0 && (
+                <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
+                  No hay producción sin liquidar para esta persona en el rango seleccionado.
+                </div>
+              )}
+
+            {settlementPreview.items.length > 0 && (
+              <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white">
+                {settlementPreview.items.map((item) => (
+                  <div
+                    key={item._id}
+                    className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 last:border-b-0"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {formatDate(item.fecha)}
+                      </p>
+
+                      <p className="text-sm text-slate-500">
+                        {Number(item.kilos || 0)} × {formatMoney(item.precio_kilo)}
+                      </p>
+                    </div>
+
+                    <p className="font-bold text-slate-950">
+                      {formatMoney(item.total_pago)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className={labelClass}>Abono inicial opcional</label>
+
+            <input
+              type="number"
+              min="0"
+              value={settlementForm.abonado}
+              onChange={(e) =>
+                setSettlementForm({
+                  ...settlementForm,
+                  abonado: e.target.value,
+                })
+              }
+              placeholder="Ej: 50000"
+              className={fieldClass}
+            />
+
+            <p className={helperTextClass}>
+              También puedes crear la liquidación y luego registrar abonos desde la tabla.
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>Observación</label>
+
+            <textarea
+              value={settlementForm.observacion}
+              onChange={(e) =>
+                setSettlementForm({
+                  ...settlementForm,
+                  observacion: e.target.value,
+                })
+              }
+              placeholder="Notas opcionales sobre esta liquidación"
+              className={textareaClass}
+            />
+          </div>
 
           <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Se incluirán solo producciones sin liquidar de esta persona dentro
-            del rango de fechas seleccionado.
+            Solo se incluirán registros diarios sin liquidar de esta persona dentro del rango seleccionado.
           </div>
         </ModalShell>
       )}
@@ -2287,7 +2703,7 @@ function BusinessProductions({
             value={paymentAmount}
             onChange={(e) => setPaymentAmount(e.target.value)}
             placeholder="Monto del abono"
-            className="input"
+            className={fieldClass}
             required
           />
         </ModalShell>
@@ -2573,7 +2989,7 @@ function BusinessPeople({ business, quickAction, onQuickActionDone }) {
               })
             }
             placeholder="Nombre completo"
-            className="input"
+            className={fieldClass}
             required
           />
 
@@ -2586,7 +3002,7 @@ function BusinessPeople({ business, quickAction, onQuickActionDone }) {
               })
             }
             placeholder="Rol o cargo. Ej: Recolector, Barbero, Empleado"
-            className="input"
+            className={fieldClass}
           />
 
           <input
@@ -2598,13 +3014,667 @@ function BusinessPeople({ business, quickAction, onQuickActionDone }) {
               })
             }
             placeholder="Teléfono opcional"
-            className="input"
+            className={fieldClass}
           />
         </ModalShell>
       )}
     </section>
   );
 }
+
+
+function BusinessReports({ business }) {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadReport = async () => {
+    try {
+      setLoading(true);
+      const response = await getBusinessReports(business._id);
+      setReport(response.reporte || null);
+    } catch (error) {
+      console.error("Error cargando reportes:", error);
+      alert(error.response?.data?.message || "No se pudo cargar el reporte");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReport();
+  }, [business._id]);
+
+  const resumen = report?.resumen || {};
+  const ventasPorProducto = report?.ventasPorProducto || [];
+  const gastosPorTipo = report?.gastosPorTipo || [];
+  const detalleMensual = report?.detalleMensual || [];
+  const ultimosMovimientos = report?.ultimosMovimientos || {};
+  const fileBaseName = sanitizeFileName(business.nombre);
+
+  const exportResumenGeneral = () => {
+    downloadCSV(`resumen_general_${fileBaseName}.csv`, [
+      {
+        ventas_totales: resumen.totalVentas || 0,
+        gastos_operativos: resumen.totalGastosOperativos || 0,
+        gastos_trabajadores: resumen.totalGastosTrabajadores || 0,
+        gastos_totales: resumen.totalGastos || 0,
+        utilidad_neta: resumen.utilidadNeta || 0,
+        kilos_vendidos: resumen.totalKilosVendidos || 0,
+        kilos_producidos: resumen.totalKilosProducidos || 0,
+        kilos_sin_liquidar: resumen.totalKilosSinLiquidar || 0,
+        pago_sin_liquidar: resumen.totalPagoSinLiquidar || 0,
+        total_liquidado: resumen.totalLiquidado || 0,
+        total_abonado: resumen.totalAbonado || 0,
+        pendiente_trabajadores: resumen.totalPendienteTrabajadores || 0,
+        trabajadores_activos: resumen.trabajadoresActivos || 0,
+        total_trabajadores: resumen.totalTrabajadores || 0,
+        liquidaciones_pagadas: resumen.liquidaciones?.pagadas || 0,
+        liquidaciones_abonadas: resumen.liquidaciones?.abonadas || 0,
+        liquidaciones_pendientes: resumen.liquidaciones?.pendientes || 0,
+      },
+    ]);
+  };
+
+  const exportDetalleMensual = () => {
+    downloadCSV(
+      `reporte_mensual_${fileBaseName}.csv`,
+      detalleMensual.map((item) => ({
+        periodo: item.periodo,
+        ventas: item.ventas || 0,
+        gastos_operativos: item.gastosOperativos || 0,
+        gastos_trabajadores: item.gastosTrabajadores || 0,
+        gastos_totales: item.gastosTotales || 0,
+        utilidad_neta: item.utilidadNeta || 0,
+        kilos_vendidos: item.kilosVendidos || 0,
+        kilos_producidos: item.kilosProducidos || 0,
+        producciones: item.producciones || 0,
+        liquidaciones: item.liquidaciones || 0,
+      }))
+    );
+  };
+
+  const exportVentasPorProducto = () => {
+    downloadCSV(
+      `ventas_por_producto_${fileBaseName}.csv`,
+      ventasPorProducto.map((item) => ({
+        producto: item.producto,
+        kilos: item.kilos || 0,
+        ventas: item.ventas || 0,
+        total: item.total || 0,
+      }))
+    );
+  };
+
+  const exportGastosPorTipo = () => {
+    downloadCSV(
+      `gastos_por_tipo_${fileBaseName}.csv`,
+      gastosPorTipo.map((item) => ({
+        tipo: item.tipo,
+        total: item.total || 0,
+        registros: item.registros || 0,
+        calculado: item.calculado ? "sí" : "no",
+      }))
+    );
+  };
+
+  const exportMovimientosRecientes = () => {
+    const ventas = (ultimosMovimientos.ventas || []).map((item) => ({
+      tipo_movimiento: "venta",
+      descripcion: item.producto || "",
+      monto: item.total_venta || 0,
+      fecha: item.fecha || "",
+      detalle: item.comprador || "",
+    }));
+
+    const gastos = (ultimosMovimientos.gastos || []).map((item) => ({
+      tipo_movimiento: "gasto",
+      descripcion: item.descripcion || "",
+      monto: item.monto || 0,
+      fecha: item.fecha || "",
+      detalle: item.tipo || "",
+    }));
+
+    const liquidaciones = (ultimosMovimientos.liquidaciones || []).map(
+      (item) => ({
+        tipo_movimiento: "liquidacion",
+        descripcion: item.trabajador_nombre || "",
+        monto: item.total_pago || 0,
+        fecha: item.fecha_fin || item.fecha_inicio || "",
+        detalle: item.estado || "",
+      })
+    );
+
+    const producciones = (ultimosMovimientos.producciones || []).map(
+      (item) => ({
+        tipo_movimiento: "produccion",
+        descripcion: item.trabajador_nombre || "",
+        monto: item.total_pago || 0,
+        fecha: item.fecha || "",
+        detalle: `${Number(item.kilos || 0)} kg`,
+      })
+    );
+
+    downloadCSV(`movimientos_recientes_${fileBaseName}.csv`, [
+      ...ventas,
+      ...gastos,
+      ...liquidaciones,
+      ...producciones,
+    ]);
+  };
+
+  if (loading) {
+    return <LoadingCard text="Generando reportes del negocio..." />;
+  }
+
+  if (!report) {
+    return (
+      <EmptyState
+        icon={<FileText size={52} />}
+        title="No se pudo cargar el reporte"
+        text="Revisa que el backend tenga activa la ruta de reportes."
+        buttonText="Reintentar"
+        onClick={loadReport}
+      />
+    );
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-2xl font-bold text-slate-950">
+              <FileText className="text-violet-600" size={24} />
+              Reportes del negocio
+            </h2>
+
+            <p className="mt-1 text-slate-500">
+              Analiza el comportamiento mensual, ventas por producto, gastos por tipo y liquidaciones.
+            </p>
+          </div>
+
+          <button
+            onClick={loadReport}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 font-semibold text-white shadow-lg shadow-violet-500/20 hover:bg-violet-700"
+          >
+            <FileText size={18} />
+            Actualizar reporte
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <ExportButton
+            label="Resumen CSV"
+            onClick={exportResumenGeneral}
+            className="border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+          />
+
+          <ExportButton
+            label="Mensual CSV"
+            onClick={exportDetalleMensual}
+            className="border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100"
+          />
+
+          <ExportButton
+            label="Ventas CSV"
+            onClick={exportVentasPorProducto}
+            className="border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          />
+
+          <ExportButton
+            label="Gastos CSV"
+            onClick={exportGastosPorTipo}
+            className="border-red-100 bg-red-50 text-red-700 hover:bg-red-100"
+          />
+
+          <ExportButton
+            label="Movimientos CSV"
+            onClick={exportMovimientosRecientes}
+            className="border-violet-100 bg-violet-50 text-violet-700 hover:bg-violet-100"
+          />
+        </div>
+      </div>
+
+      <ReportMonthlyChart items={detalleMensual} />
+
+      <section className="grid gap-6 xl:grid-cols-3">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+          <div className="mb-5">
+            <h3 className="text-xl font-bold text-slate-950">
+              Detalle mensual
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Ventas, gastos y utilidad por mes.
+            </p>
+          </div>
+
+          {detalleMensual.length === 0 ? (
+            <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+              Aún no hay movimientos suficientes para mostrar detalle mensual.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead className="border-b border-slate-200 bg-slate-50">
+                  <tr>
+                    <TableHeader>Mes</TableHeader>
+                    <TableHeader>Ventas</TableHeader>
+                    <TableHeader>Gastos operativos</TableHeader>
+                    <TableHeader>Trabajadores</TableHeader>
+                    <TableHeader>Utilidad</TableHeader>
+                    <TableHeader>Kilos vendidos</TableHeader>
+                    <TableHeader>Kilos producidos</TableHeader>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {detalleMensual.map((item) => (
+                    <tr
+                      key={item.periodo}
+                      className="border-b border-slate-100 last:border-b-0"
+                    >
+                      <TableCell strong>{item.periodo}</TableCell>
+
+                      <TableCell className="font-semibold text-emerald-600">
+                        {formatMoney(item.ventas)}
+                      </TableCell>
+
+                      <TableCell className="font-semibold text-red-600">
+                        {formatMoney(item.gastosOperativos)}
+                      </TableCell>
+
+                      <TableCell className="font-semibold text-amber-600">
+                        {formatMoney(item.gastosTrabajadores)}
+                      </TableCell>
+
+                      <TableCell
+                        className={`font-bold ${
+                          Number(item.utilidadNeta || 0) >= 0
+                            ? "text-emerald-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {formatMoney(item.utilidadNeta)}
+                      </TableCell>
+
+                      <TableCell>{Number(item.kilosVendidos || 0)}</TableCell>
+                      <TableCell>{Number(item.kilosProducidos || 0)}</TableCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-950">
+            Estado de liquidaciones
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Resumen de pagos a trabajadores.
+          </p>
+
+          <div className="mt-5 space-y-3">
+            <ReportLine
+              label="Total liquidaciones"
+              value={Number(resumen.liquidaciones?.total || 0)}
+            />
+            <ReportLine
+              label="Pagadas"
+              value={Number(resumen.liquidaciones?.pagadas || 0)}
+              valueClass="text-emerald-600"
+            />
+            <ReportLine
+              label="Abonadas"
+              value={Number(resumen.liquidaciones?.abonadas || 0)}
+              valueClass="text-blue-600"
+            />
+            <ReportLine
+              label="Pendientes"
+              value={Number(resumen.liquidaciones?.pendientes || 0)}
+              valueClass="text-orange-600"
+            />
+            <ReportLine
+              label="Total liquidado"
+              value={formatMoney(resumen.totalLiquidado)}
+              valueClass="text-slate-900"
+            />
+            <ReportLine
+              label="Total abonado"
+              value={formatMoney(resumen.totalAbonado)}
+              valueClass="text-blue-600"
+            />
+            <ReportLine
+              label="Pendiente"
+              value={formatMoney(resumen.totalPendienteTrabajadores)}
+              valueClass="text-orange-600"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <ReportListCard
+          title="Ventas por producto"
+          description="Productos con más ingresos."
+          emptyText="No hay ventas registradas."
+          items={ventasPorProducto}
+          renderItem={(item) => (
+            <div
+              key={item.producto}
+              className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0"
+            >
+              <div>
+                <p className="font-semibold text-slate-900">{item.producto}</p>
+                <p className="text-sm text-slate-500">
+                  {Number(item.kilos || 0)} kg · {Number(item.ventas || 0)} ventas
+                </p>
+              </div>
+
+              <p className="font-bold text-emerald-600">
+                {formatMoney(item.total)}
+              </p>
+            </div>
+          )}
+        />
+
+        <ReportListCard
+          title="Gastos por tipo"
+          description="Incluye trabajadores como gasto calculado."
+          emptyText="No hay gastos registrados."
+          items={gastosPorTipo}
+          renderItem={(item) => (
+            <div
+              key={item.tipo}
+              className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0"
+            >
+              <div>
+                <p className="font-semibold capitalize text-slate-900">
+                  {item.tipo}
+                </p>
+                <p className="text-sm text-slate-500">
+                  {Number(item.registros || 0)} registros
+                  {item.calculado ? " · automático" : ""}
+                </p>
+              </div>
+
+              <p className="font-bold text-red-600">
+                {formatMoney(item.total)}
+              </p>
+            </div>
+          )}
+        />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-950">
+            Producción pendiente
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Trabajo registrado que aún no ha sido liquidado.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl bg-cyan-50 p-4">
+              <p className="text-sm font-semibold text-cyan-700">
+                Kilos sin liquidar
+              </p>
+              <p className="mt-2 text-2xl font-bold text-cyan-700">
+                {Number(resumen.totalKilosSinLiquidar || 0)} kg
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-violet-50 p-4">
+              <p className="text-sm font-semibold text-violet-700">
+                Pago sin liquidar
+              </p>
+              <p className="mt-2 text-2xl font-bold text-violet-700">
+                {formatMoney(resumen.totalPagoSinLiquidar)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-950">
+            Últimos movimientos
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Actividad reciente del negocio.
+          </p>
+
+          <div className="mt-5 space-y-3">
+            <ReportLine
+              label="Ventas recientes"
+              value={Number(ultimosMovimientos.ventas?.length || 0)}
+              valueClass="text-emerald-600"
+            />
+            <ReportLine
+              label="Gastos recientes"
+              value={Number(ultimosMovimientos.gastos?.length || 0)}
+              valueClass="text-red-600"
+            />
+            <ReportLine
+              label="Liquidaciones recientes"
+              value={Number(ultimosMovimientos.liquidaciones?.length || 0)}
+              valueClass="text-blue-600"
+            />
+            <ReportLine
+              label="Producciones recientes"
+              value={Number(ultimosMovimientos.producciones?.length || 0)}
+              valueClass="text-cyan-600"
+            />
+          </div>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function ExportButton({ label, onClick, className = "" }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition ${className}`}
+    >
+      <Download size={16} />
+      {label}
+    </button>
+  );
+}
+
+function ReportMonthlyChart({ items }) {
+  if (!items || items.length === 0) {
+    return null;
+  }
+
+  const maxValue = Math.max(
+    ...items.map((item) =>
+      Math.max(
+        Number(item.ventas || 0),
+        Number(item.gastosTotales || 0),
+        Math.abs(Number(item.utilidadNeta || 0))
+      )
+    ),
+    1
+  );
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-5">
+        <h3 className="text-xl font-bold text-slate-950">
+          Gráfica mensual
+        </h3>
+
+        <p className="mt-1 text-sm text-slate-500">
+          Comparación visual de ventas, gastos y utilidad por mes.
+        </p>
+      </div>
+
+      <div className="space-y-5">
+        {items.map((item) => {
+          const ventasWidth = (Number(item.ventas || 0) / maxValue) * 100;
+          const gastosWidth =
+            (Number(item.gastosTotales || 0) / maxValue) * 100;
+          const utilidadWidth =
+            (Math.abs(Number(item.utilidadNeta || 0)) / maxValue) * 100;
+
+          return (
+            <div key={item.periodo} className="space-y-2">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-bold text-slate-900">{item.periodo}</p>
+
+                <p
+                  className={`text-sm font-bold ${
+                    Number(item.utilidadNeta || 0) >= 0
+                      ? "text-emerald-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  Utilidad: {formatMoney(item.utilidadNeta)}
+                </p>
+              </div>
+
+              <ChartBar
+                label="Ventas"
+                value={item.ventas}
+                width={ventasWidth}
+                barClass="bg-emerald-500"
+              />
+
+              <ChartBar
+                label="Gastos"
+                value={item.gastosTotales}
+                width={gastosWidth}
+                barClass="bg-red-500"
+              />
+
+              <ChartBar
+                label="Utilidad"
+                value={item.utilidadNeta}
+                width={utilidadWidth}
+                barClass={
+                  Number(item.utilidadNeta || 0) >= 0
+                    ? "bg-blue-500"
+                    : "bg-orange-500"
+                }
+              />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ChartBar({ label, value, width, barClass }) {
+  return (
+    <div>
+      <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
+        <span>{label}</span>
+        <span>{formatMoney(value)}</span>
+      </div>
+
+      <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-3 rounded-full ${barClass}`}
+          style={{ width: `${Math.max(width, 3)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+
+function ReportLine({ label, value, valueClass = "text-slate-900" }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
+      <span className="text-sm font-semibold text-slate-500">{label}</span>
+      <span className={`font-bold ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
+function ReportListCard({ title, description, emptyText, items, renderItem }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h3 className="text-xl font-bold text-slate-950">{title}</h3>
+
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+
+      <div className="mt-5">
+        {items.length === 0 ? (
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+            {emptyText}
+          </p>
+        ) : (
+          items.map(renderItem)
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+
+function DateInput({ label, value, onChange, required = false, helperText }) {
+  const inputRef = useRef(null);
+
+  const openCalendar = () => {
+    const input = inputRef.current;
+
+    if (!input) return;
+
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
+  };
+
+  return (
+    <div>
+      {label && <label className={labelClass}>{label}</label>}
+
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          onChange={onChange}
+          className={`${fieldClass} cursor-pointer pr-12`}
+          required={required}
+          onClick={openCalendar}
+          onFocus={(e) => {
+            if (typeof e.currentTarget.showPicker === "function") {
+              e.currentTarget.showPicker();
+            }
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={openCalendar}
+          className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-slate-400 transition hover:bg-violet-50 hover:text-violet-600"
+          aria-label="Abrir calendario"
+        >
+          <CalendarDays size={18} />
+        </button>
+      </div>
+
+      {helperText && <p className={helperTextClass}>{helperText}</p>}
+    </div>
+  );
+}
+
 
 function SectionHeader({ icon, title, description, buttonText, onClick }) {
   return (
@@ -2637,12 +3707,13 @@ function ModalShell({
   saving,
   submitText,
   children,
+  maxWidth = "max-w-lg",
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm">
       <form
         onSubmit={onSubmit}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+        className={`max-h-[90vh] w-full ${maxWidth} overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl`}
       >
         <div className="mb-6 flex items-center justify-between">
           <div>

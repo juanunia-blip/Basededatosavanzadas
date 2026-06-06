@@ -154,26 +154,11 @@ const deleteBusiness = async (req, res) => {
     }
 
     await Promise.all([
-      TrabajadorNegocio.deleteMany({
-        usuario_id,
-        negocio_id: req.params.id,
-      }),
-      ProduccionNegocio.deleteMany({
-        usuario_id,
-        negocio_id: req.params.id,
-      }),
-      GastoNegocio.deleteMany({
-        usuario_id,
-        negocio_id: req.params.id,
-      }),
-      VentaNegocio.deleteMany({
-        usuario_id,
-        negocio_id: req.params.id,
-      }),
-      LiquidacionNegocio.deleteMany({
-        usuario_id,
-        negocio_id: req.params.id,
-      }),
+      TrabajadorNegocio.deleteMany({ usuario_id, negocio_id: req.params.id }),
+      ProduccionNegocio.deleteMany({ usuario_id, negocio_id: req.params.id }),
+      GastoNegocio.deleteMany({ usuario_id, negocio_id: req.params.id }),
+      VentaNegocio.deleteMany({ usuario_id, negocio_id: req.params.id }),
+      LiquidacionNegocio.deleteMany({ usuario_id, negocio_id: req.params.id }),
     ]);
 
     res.status(200).json({
@@ -328,14 +313,8 @@ const addProduction = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
 
-    const {
-      trabajador_id,
-      fecha,
-      kilos,
-      precio_kilo,
-      abonado,
-      observacion,
-    } = req.body;
+    const { trabajador_id, fecha, kilos, precio_kilo, abonado, observacion } =
+      req.body;
 
     if (
       !trabajador_id ||
@@ -437,17 +416,11 @@ const updateProduction = async (req, res) => {
       });
     }
 
-    if (req.body.kilos !== undefined) {
-      req.body.kilos = Number(req.body.kilos);
-    }
-
-    if (req.body.precio_kilo !== undefined) {
+    if (req.body.kilos !== undefined) req.body.kilos = Number(req.body.kilos);
+    if (req.body.precio_kilo !== undefined)
       req.body.precio_kilo = Number(req.body.precio_kilo);
-    }
-
-    if (req.body.abonado !== undefined) {
+    if (req.body.abonado !== undefined)
       req.body.abonado = Number(req.body.abonado);
-    }
 
     const produccion = await ProduccionNegocio.findOneAndUpdate(
       {
@@ -511,10 +484,6 @@ const deleteProduction = async (req, res) => {
   }
 };
 
-/*
-  Este endpoint se mantiene por compatibilidad con el frontend actual.
-  Para el flujo nuevo, lo recomendado es abonar a la liquidación.
-*/
 const addProductionPayment = async (req, res) => {
   try {
     const { businessId, productionId } = req.params;
@@ -889,9 +858,7 @@ const getUnsettledProductions = async (req, res) => {
     if (fecha_inicio || fecha_fin) {
       query.fecha = {};
 
-      if (fecha_inicio) {
-        query.fecha.$gte = new Date(fecha_inicio);
-      }
+      if (fecha_inicio) query.fecha.$gte = new Date(fecha_inicio);
 
       if (fecha_fin) {
         const fin = new Date(fecha_fin);
@@ -1058,6 +1025,7 @@ const addBusinessSale = async (req, res) => {
       cantidad,
       precio_kilo,
       precio_unitario,
+      precio_carga,
       total_venta,
       fecha,
       comprador,
@@ -1088,10 +1056,11 @@ const addBusinessSale = async (req, res) => {
       usuario_id,
       negocio_id: negocio._id,
       producto,
-      kilos: Number(kilos || 0),
-      cantidad: Number(cantidad || 0),
-      precio_kilo: Number(precio_kilo || 0),
-      precio_unitario: Number(precio_unitario || 0),
+      kilos: Number(kilos || cantidadFinal || 0),
+      cantidad: Number(cantidad || cantidadFinal || 0),
+      precio_kilo: Number(precio_kilo || precioFinal || 0),
+      precio_unitario: Number(precio_unitario || precioFinal || 0),
+      precio_carga: Number(precio_carga || 0),
       total_venta: totalFinal,
       fecha,
       comprador: comprador || "",
@@ -1140,6 +1109,8 @@ const updateBusinessSale = async (req, res) => {
       req.body.precio_kilo = Number(req.body.precio_kilo);
     if (req.body.precio_unitario !== undefined)
       req.body.precio_unitario = Number(req.body.precio_unitario);
+    if (req.body.precio_carga !== undefined)
+      req.body.precio_carga = Number(req.body.precio_carga);
     if (req.body.total_venta !== undefined)
       req.body.total_venta = Number(req.body.total_venta);
 
@@ -1242,14 +1213,11 @@ const getBusinessSummary = async (req, res) => {
     );
 
     const totalPagoTrabajadores = liquidaciones.reduce(
-      (sum, item) => sum + Number(item.total_pago || 0),
-      0
-    );
-
-    const totalAbonado = liquidaciones.reduce(
       (sum, item) => sum + Number(item.abonado || 0),
       0
     );
+
+    const totalAbonado = totalPagoTrabajadores;
 
     const totalPendiente = liquidaciones.reduce(
       (sum, item) => sum + Number(item.pendiente || 0),
@@ -1266,17 +1234,28 @@ const getBusinessSummary = async (req, res) => {
       0
     );
 
+    const totalGastosConTrabajadores =
+      totalGastos + totalPagoTrabajadores;
+
     const utilidadNeta =
-      totalVentas - totalGastos - totalPagoTrabajadores;
+      totalVentas - totalGastosConTrabajadores;
 
     res.status(200).json({
       negocio,
       resumen: {
         totalVentas,
+
+        // Gastos operativos manuales.
         totalGastos,
+
+        // Pagos reales a trabajadores desde liquidaciones abonadas o pagadas.
         totalPagoTrabajadores,
         totalAbonado,
         totalPendiente,
+
+        // Total visual/contable para mostrar "gastos del negocio".
+        totalGastosConTrabajadores,
+
         totalKilosSinLiquidar,
         totalPagoSinLiquidar,
         utilidadNeta,
@@ -1290,9 +1269,253 @@ const getBusinessSummary = async (req, res) => {
   }
 };
 
+const getMonthKey = (date) => {
+  if (!date) return "sin_fecha";
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return "sin_fecha";
+  return value.toISOString().slice(0, 7);
+};
+
+const addToPeriod = (target, period, values = {}) => {
+  if (!target[period]) {
+    target[period] = {
+      periodo: period,
+      ventas: 0,
+      gastosOperativos: 0,
+      gastosTrabajadores: 0,
+      gastosTotales: 0,
+      utilidadNeta: 0,
+      kilosVendidos: 0,
+      kilosProducidos: 0,
+      producciones: 0,
+      liquidaciones: 0,
+    };
+  }
+
+  Object.keys(values).forEach((key) => {
+    target[period][key] += Number(values[key] || 0);
+  });
+
+  target[period].gastosTotales =
+    Number(target[period].gastosOperativos || 0) +
+    Number(target[period].gastosTrabajadores || 0);
+
+  target[period].utilidadNeta =
+    Number(target[period].ventas || 0) -
+    Number(target[period].gastosTotales || 0);
+};
+
+const getBusinessReports = async (req, res) => {
+  try {
+    const usuario_id = getUsuarioId(req);
+    const negocio_id = req.params.businessId;
+
+    const negocio = await validarNegocio(negocio_id, usuario_id);
+
+    if (!negocio) {
+      return res.status(404).json({
+        message: "Negocio no encontrado",
+      });
+    }
+
+    const [ventas, gastos, liquidaciones, producciones, trabajadores] =
+      await Promise.all([
+        VentaNegocio.find({ usuario_id, negocio_id }).sort({ fecha: -1 }),
+        GastoNegocio.find({ usuario_id, negocio_id }).sort({ fecha: -1 }),
+        LiquidacionNegocio.find({ usuario_id, negocio_id }).sort({
+          fecha_inicio: -1,
+        }),
+        ProduccionNegocio.find({ usuario_id, negocio_id }).sort({ fecha: -1 }),
+        TrabajadorNegocio.find({ usuario_id, negocio_id }),
+      ]);
+
+    const totalVentas = ventas.reduce(
+      (sum, item) => sum + Number(item.total_venta || 0),
+      0
+    );
+
+    const totalGastosOperativos = gastos.reduce(
+      (sum, item) => sum + Number(item.monto || 0),
+      0
+    );
+
+    const totalGastosTrabajadores = liquidaciones.reduce(
+      (sum, item) => sum + Number(item.abonado || 0),
+      0
+    );
+
+    const totalGastos =
+      Number(totalGastosOperativos || 0) +
+      Number(totalGastosTrabajadores || 0);
+
+    const utilidadNeta = totalVentas - totalGastos;
+
+    const totalKilosVendidos = ventas.reduce(
+      (sum, item) => sum + Number(item.kilos || item.cantidad || 0),
+      0
+    );
+
+    const totalKilosProducidos = producciones.reduce(
+      (sum, item) => sum + Number(item.kilos || 0),
+      0
+    );
+
+    const produccionesSinLiquidar = producciones.filter(
+      (item) => !item.liquidacion_id
+    );
+
+    const totalKilosSinLiquidar = produccionesSinLiquidar.reduce(
+      (sum, item) => sum + Number(item.kilos || 0),
+      0
+    );
+
+    const totalPagoSinLiquidar = produccionesSinLiquidar.reduce(
+      (sum, item) => sum + Number(item.total_pago || 0),
+      0
+    );
+
+    const totalLiquidado = liquidaciones.reduce(
+      (sum, item) => sum + Number(item.total_pago || 0),
+      0
+    );
+
+    const totalAbonado = liquidaciones.reduce(
+      (sum, item) => sum + Number(item.abonado || 0),
+      0
+    );
+
+    const totalPendienteTrabajadores = liquidaciones.reduce(
+      (sum, item) => sum + Number(item.pendiente || 0),
+      0
+    );
+
+    const ventasPorProductoMap = {};
+    ventas.forEach((venta) => {
+      const producto = venta.producto || "Sin producto";
+
+      if (!ventasPorProductoMap[producto]) {
+        ventasPorProductoMap[producto] = {
+          producto,
+          kilos: 0,
+          total: 0,
+          ventas: 0,
+        };
+      }
+
+      ventasPorProductoMap[producto].kilos += Number(
+        venta.kilos || venta.cantidad || 0
+      );
+      ventasPorProductoMap[producto].total += Number(venta.total_venta || 0);
+      ventasPorProductoMap[producto].ventas += 1;
+    });
+
+    const gastosPorTipoMap = {};
+    gastos.forEach((gasto) => {
+      const tipo = gasto.tipo || "otro";
+
+      if (!gastosPorTipoMap[tipo]) {
+        gastosPorTipoMap[tipo] = {
+          tipo,
+          total: 0,
+          registros: 0,
+        };
+      }
+
+      gastosPorTipoMap[tipo].total += Number(gasto.monto || 0);
+      gastosPorTipoMap[tipo].registros += 1;
+    });
+
+    if (totalGastosTrabajadores > 0) {
+      gastosPorTipoMap.trabajadores = {
+        tipo: "trabajadores",
+        total: totalGastosTrabajadores,
+        registros: liquidaciones.filter((item) => Number(item.abonado || 0) > 0)
+          .length,
+        calculado: true,
+      };
+    }
+
+    const detalleMensualMap = {};
+
+    ventas.forEach((venta) => {
+      addToPeriod(detalleMensualMap, getMonthKey(venta.fecha), {
+        ventas: Number(venta.total_venta || 0),
+        kilosVendidos: Number(venta.kilos || venta.cantidad || 0),
+      });
+    });
+
+    gastos.forEach((gasto) => {
+      addToPeriod(detalleMensualMap, getMonthKey(gasto.fecha), {
+        gastosOperativos: Number(gasto.monto || 0),
+      });
+    });
+
+    liquidaciones.forEach((liquidacion) => {
+      addToPeriod(detalleMensualMap, getMonthKey(liquidacion.fecha_fin), {
+        gastosTrabajadores: Number(liquidacion.abonado || 0),
+        liquidaciones: 1,
+      });
+    });
+
+    producciones.forEach((produccion) => {
+      addToPeriod(detalleMensualMap, getMonthKey(produccion.fecha), {
+        kilosProducidos: Number(produccion.kilos || 0),
+        producciones: 1,
+      });
+    });
+
+    res.status(200).json({
+      negocio,
+      reporte: {
+        resumen: {
+          totalVentas,
+          totalGastosOperativos,
+          totalGastosTrabajadores,
+          totalGastos,
+          utilidadNeta,
+          totalKilosVendidos,
+          totalKilosProducidos,
+          totalKilosSinLiquidar,
+          totalPagoSinLiquidar,
+          totalLiquidado,
+          totalAbonado,
+          totalPendienteTrabajadores,
+          trabajadoresActivos: trabajadores.filter((t) => t.activo !== false)
+            .length,
+          totalTrabajadores: trabajadores.length,
+          liquidaciones: {
+            total: liquidaciones.length,
+            pagadas: liquidaciones.filter((l) => l.estado === "pagado").length,
+            abonadas: liquidaciones.filter((l) => l.estado === "abonado").length,
+            pendientes: liquidaciones.filter((l) => l.estado === "pendiente")
+              .length,
+          },
+        },
+        ventasPorProducto: Object.values(ventasPorProductoMap),
+        gastosPorTipo: Object.values(gastosPorTipoMap),
+        detalleMensual: Object.values(detalleMensualMap).sort((a, b) =>
+          b.periodo.localeCompare(a.periodo)
+        ),
+        ultimosMovimientos: {
+          ventas: ventas.slice(0, 5),
+          gastos: gastos.slice(0, 5),
+          liquidaciones: liquidaciones.slice(0, 5),
+          producciones: producciones.slice(0, 5),
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error generando reporte del negocio",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createBusiness,
   getBusinesses,
+  getBusinessReports,
   getBusinessById,
   updateBusiness,
   deleteBusiness,

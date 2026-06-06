@@ -31,6 +31,12 @@ const BusinessWorkerSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    
+    rol: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
     activo: {
       type: Boolean,
