@@ -14,6 +14,7 @@ import Budgets from "./pages/Budgets";
 import Savings from "./pages/Savings";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
+import Businesses from "./pages/Businesses";
 
 import { useFinanceData } from "./hooks/useFinanceData";
 import { useAuth } from "./context/AuthContext";
@@ -94,6 +95,11 @@ function PrivateApp() {
           />
 
           <Route
+            path="/negocios"
+            element={<Businesses />}
+          />
+
+          <Route
             path="/categorias"
             element={
               <Categories
@@ -118,6 +124,7 @@ function PrivateApp() {
             element={
               <Budgets
                 budgets={budgets}
+                savings={savings}
                 expenses={expenses}
                 categories={categories}
                 onRefresh={refetch}

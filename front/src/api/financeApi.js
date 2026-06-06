@@ -23,6 +23,7 @@ export const updateMe = async (data) => {
   const response = await api.put("/auth/me", data);
   return response.data;
 };
+
 /* =========================
    INCOMES
 ========================= */
@@ -167,6 +168,14 @@ export const deleteSaving = async (id) => {
   return response.data;
 };
 
+export const addSavingContribution = async (id, monto) => {
+  const response = await api.patch(`/add-saving-contribution/${id}`, {
+    monto,
+  });
+
+  return response.data;
+};
+
 /* =========================
    USER
 ========================= */
@@ -195,3 +204,244 @@ export const getAIInsights = async () => {
   return response.data;
 };
 
+/* =========================
+   BUSINESSES
+========================= */
+
+export const getBusinesses = async () => {
+  const response = await api.get("/businesses");
+  return response.data;
+};
+
+export const createBusiness = async (data) => {
+  const response = await api.post("/businesses", data);
+  return response.data;
+};
+
+export const getBusinessById = async (id) => {
+  const response = await api.get(`/businesses/${id}`);
+  return response.data;
+};
+
+export const updateBusiness = async (id, data) => {
+  const response = await api.put(`/businesses/${id}`, data);
+  return response.data;
+};
+
+export const deleteBusiness = async (id) => {
+  const response = await api.delete(`/businesses/${id}`);
+  return response.data;
+};
+
+export const getBusinessSummary = async (businessId) => {
+  const response = await api.get(`/businesses/${businessId}/summary`);
+  return response.data;
+};
+
+export const getBusinessWorkers = async (businessId) => {
+  const response = await api.get(`/businesses/${businessId}/workers`);
+  return response.data;
+};
+
+export const createBusinessWorker = async (businessId, data) => {
+  const response = await api.post(`/businesses/${businessId}/workers`, data);
+  return response.data;
+};
+
+export const getBusinessProductions = async (businessId) => {
+  const response = await api.get(`/businesses/${businessId}/productions`);
+  return response.data;
+};
+
+export const createBusinessProduction = async (businessId, data) => {
+  const response = await api.post(
+    `/businesses/${businessId}/productions`,
+    data
+  );
+  return response.data;
+};
+
+export const getBusinessExpenses = async (businessId) => {
+  const response = await api.get(`/businesses/${businessId}/expenses`);
+  return response.data;
+};
+
+export const createBusinessExpense = async (businessId, data) => {
+  const response = await api.post(`/businesses/${businessId}/expenses`, data);
+  return response.data;
+};
+
+export const getBusinessSales = async (businessId) => {
+  const response = await api.get(`/businesses/${businessId}/sales`);
+  return response.data;
+};
+
+export const createBusinessSale = async (businessId, data) => {
+  const response = await api.post(`/businesses/${businessId}/sales`, data);
+  return response.data;
+};
+export const updateBusinessWorker = async (
+  businessId,
+  workerId,
+  data
+) => {
+  const response = await api.put(
+    `/businesses/${businessId}/workers/${workerId}`,
+    data
+  );
+
+  return response.data;
+};
+
+export const deleteBusinessWorker = async (
+  businessId,
+  workerId
+) => {
+  const response = await api.delete(
+    `/businesses/${businessId}/workers/${workerId}`
+  );
+
+  return response.data;
+};
+
+export const updateBusinessProduction = async (
+  businessId,
+  productionId,
+  data
+) => {
+  const response = await api.put(
+    `/businesses/${businessId}/productions/${productionId}`,
+    data
+  );
+
+  return response.data;
+};
+
+export const deleteBusinessProduction = async (
+  businessId,
+  productionId
+) => {
+  const response = await api.delete(
+    `/businesses/${businessId}/productions/${productionId}`
+  );
+
+  return response.data;
+};
+
+export const addBusinessProductionPayment = async (
+  businessId,
+  productionId,
+  monto
+) => {
+  const response = await api.patch(
+    `/businesses/${businessId}/productions/${productionId}/payment`,
+    { monto }
+  );
+
+  return response.data;
+};
+
+export const updateBusinessExpense = async (
+  businessId,
+  expenseId,
+  data
+) => {
+  const response = await api.put(
+    `/businesses/${businessId}/expenses/${expenseId}`,
+    data
+  );
+
+  return response.data;
+};
+
+export const deleteBusinessExpense = async (
+  businessId,
+  expenseId
+) => {
+  const response = await api.delete(
+    `/businesses/${businessId}/expenses/${expenseId}`
+  );
+
+  return response.data;
+};
+
+export const updateBusinessSale = async (
+  businessId,
+  saleId,
+  data
+) => {
+  const response = await api.put(
+    `/businesses/${businessId}/sales/${saleId}`,
+    data
+  );
+
+  return response.data;
+};
+
+export const deleteBusinessSale = async (
+  businessId,
+  saleId
+) => {
+  const response = await api.delete(
+    `/businesses/${businessId}/sales/${saleId}`
+  );
+
+  return response.data;
+};
+
+export const getBusinessSettlements = async (businessId) => {
+  const response = await api.get(`/businesses/${businessId}/settlements`);
+  return response.data;
+};
+
+export const getBusinessSettlementById = async (businessId, settlementId) => {
+  const response = await api.get(
+    `/businesses/${businessId}/settlements/${settlementId}`
+  );
+  return response.data;
+};
+
+export const createBusinessSettlement = async (businessId, data) => {
+  const response = await api.post(
+    `/businesses/${businessId}/settlements`,
+    data
+  );
+  return response.data;
+};
+
+export const addBusinessSettlementPayment = async (
+  businessId,
+  settlementId,
+  monto
+) => {
+  const response = await api.patch(
+    `/businesses/${businessId}/settlements/${settlementId}/payment`,
+    { monto }
+  );
+  return response.data;
+};
+
+export const markBusinessSettlementAsPaid = async (
+  businessId,
+  settlementId
+) => {
+  const response = await api.patch(
+    `/businesses/${businessId}/settlements/${settlementId}/mark-paid`
+  );
+  return response.data;
+};
+
+export const deleteBusinessSettlement = async (businessId, settlementId) => {
+  const response = await api.delete(
+    `/businesses/${businessId}/settlements/${settlementId}`
+  );
+  return response.data;
+};
+
+export const getBusinessUnsettledProductions = async (businessId, params = {}) => {
+  const response = await api.get(
+    `/businesses/${businessId}/productions-unsettled`,
+    { params }
+  );
+  return response.data;
+};

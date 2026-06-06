@@ -12,6 +12,7 @@ const savingRoutes = require('./routes/saving');
 const reportRoutes = require('./routes/report');
 const accountRoutes = require('./routes/account');
 const authRoutes = require("./routes/auth");
+const businessRoutes = require("./routes/business");
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use('/api/v1', reportRoutes);
 app.use('/api/v1', accountRoutes);
 app.use('/api/v1', aiRoutes);
 app.use("/api/v1", authRoutes);
+app.use("/api/v1", businessRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });
