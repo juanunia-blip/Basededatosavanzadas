@@ -77,6 +77,26 @@ const BusinessSettlementSchema = new mongoose.Schema(
       default: "pendiente",
     },
 
+    anulada: {
+      type: Boolean,
+      default: false,
+    },
+
+    fecha_anulacion: {
+      type: Date,
+      default: null,
+    },
+
+    motivo_anulacion: {
+      type: String,
+      default: "",
+    },
+
+    anulada_por: {
+      type: String,
+      default: "",
+    },
+
     producciones: [
       {
         type: mongoose.Schema.Types.ObjectId,

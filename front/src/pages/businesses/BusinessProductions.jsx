@@ -1,6 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, ClipboardList, Eye, FileText, HandCoins, Plus, Trash2, Users } from "lucide-react";
-import { addBusinessSettlementPayment, createBusinessProduction, createBusinessSettlement, deleteBusinessProduction, deleteBusinessSettlement, getBusinessProductions, getBusinessSettlementById, getBusinessSettlements, getBusinessUnsettledProductions, getBusinessWorkers, markBusinessSettlementAsPaid, updateBusinessProduction } from "../../api/financeApi";
+
+import {
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Eye,
+  FileText,
+  HandCoins,
+  Plus,
+  Trash2,
+  Users,
+} from "lucide-react";
+
+import {
+  addBusinessSettlementPayment,
+  cancelBusinessSettlement,
+  createBusinessProduction,
+  createBusinessSettlement,
+  deleteBusinessProduction,
+  deleteBusinessSettlement,
+  getBusinessProductions,
+  getBusinessSettlementById,
+  getBusinessSettlements,
+  getBusinessUnsettledProductions,
+  getBusinessWorkers,
+  markBusinessSettlementAsPaid,
+  updateBusinessProduction,
+} from "../../api/financeApi";
+
 import ActionButtons from "../../components/ActionButtons";
 import DateInput from "../../components/DateInput";
 import EmptyState from "../../components/EmptyState";
@@ -8,9 +35,26 @@ import LoadingCard from "../../components/LoadingCard";
 import ModalShell from "../../components/ModalShell";
 import StatusBadge from "../../components/StatusBadge";
 import TotalPreview from "../../components/TotalPreview";
-import { DataTable, TableCell, TableHeader } from "../../components/DataTable";
-import { formatDate, formatMoney, getToday } from "../../components/utils/businessFormatters";
-import { fieldClass, helperTextClass, labelClass, selectClass, textareaClass } from "../../components/utils/businessStyles";
+
+import {
+  DataTable,
+  TableCell,
+  TableHeader,
+} from "../../components/DataTable";
+
+import {
+  formatDate,
+  formatMoney,
+  getToday,
+} from "../../components/utils/businessFormatters";
+
+import {
+  fieldClass,
+  helperTextClass,
+  labelClass,
+  selectClass,
+  textareaClass,
+} from "../../components/utils/businessStyles";
 
 function BusinessProductions({
   business,
@@ -34,6 +78,10 @@ function BusinessProductions({
   const [settlementModalOpen, setSettlementModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [settlementToCancel, setSettlementToCancel] = useState(null);
 
   const [selectedSettlement, setSelectedSettlement] = useState(null);
   const [settlementDetail, setSettlementDetail] = useState(null);
@@ -375,6 +423,11 @@ function BusinessProductions({
   };
 
   const openPaymentModal = (settlement) => {
+    if (settlement.anulada) {
+      alert("No puedes abonar una liquidación anulada.");
+      return;
+    }
+
     setSelectedSettlement(settlement);
     setPaymentAmount("");
     setPaymentModalOpen(true);
@@ -416,6 +469,11 @@ function BusinessProductions({
   };
 
   const markSettlementPaid = async (settlement) => {
+    if (settlement.anulada) {
+      alert("No puedes marcar como pagada una liquidación anulada.");
+      return;
+    }
+
     const confirmPay = window.confirm(
       `¿Marcar como pagada la liquidación de ${settlement.trabajador_nombre}?`
     );
@@ -437,6 +495,18 @@ function BusinessProductions({
   };
 
   const handleDeleteSettlement = async (settlement) => {
+    if (
+      settlement.anulada ||
+      Number(settlement.abonado || 0) > 0 ||
+      settlement.estado === "abonado" ||
+      settlement.estado === "pagado"
+    ) {
+      alert(
+        "Esta liquidación tiene historial contable. Usa la opción de anular para conservar la trazabilidad."
+      );
+      return;
+    }
+
     const confirmDelete = window.confirm(
       `¿Eliminar la liquidación de ${settlement.trabajador_nombre}? Las producciones volverán a quedar sin liquidar.`
     );
@@ -448,7 +518,48 @@ function BusinessProductions({
       await loadData();
       await onRefreshSummary?.();
     } catch (error) {
-      alert(error.response?.data?.message || "No se pudo eliminar la liquidación");
+      alert(
+        error.response?.data?.message || "No se pudo eliminar la liquidación"
+      );
+    }
+  };
+
+  const openCancelSettlementModal = (settlement) => {
+    setSettlementToCancel(settlement);
+    setCancelReason("");
+    setCancelModalOpen(true);
+  };
+
+  const closeCancelSettlementModal = () => {
+    setSettlementToCancel(null);
+    setCancelReason("");
+    setCancelModalOpen(false);
+  };
+
+  const handleCancelSettlement = async (e) => {
+    e.preventDefault();
+
+    if (!cancelReason.trim()) {
+      alert("Debes escribir el motivo de anulación");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      await cancelBusinessSettlement(
+        business._id,
+        settlementToCancel._id,
+        cancelReason
+      );
+
+      closeCancelSettlementModal();
+      await loadData();
+      await onRefreshSummary?.();
+    } catch (error) {
+      alert(error.response?.data?.message || "No se pudo anular la liquidación");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -484,7 +595,8 @@ function BusinessProductions({
             </h2>
 
             <p className="mt-1 text-slate-500">
-              Registra trabajo diario y luego agrúpalo en liquidaciones por semana, quincena o mes.
+              Registra trabajo diario y luego agrúpalo en liquidaciones por
+              semana, quincena o mes.
             </p>
           </div>
 
@@ -585,10 +697,22 @@ function BusinessProductions({
                     {settlements.map((settlement) => (
                       <tr
                         key={settlement._id}
-                        className="border-b border-slate-100 last:border-b-0"
+                        className={`border-b border-slate-100 last:border-b-0 ${
+                          settlement.anulada ? "bg-slate-50 opacity-70" : ""
+                        }`}
                       >
                         <TableCell strong>
-                          {settlement.trabajador_nombre}
+                          <div>
+                            <p>{settlement.trabajador_nombre}</p>
+
+                            {settlement.anulada && (
+                              <p className="mt-1 text-xs font-normal text-slate-500">
+                                Anulada:{" "}
+                                {settlement.motivo_anulacion ||
+                                  "Sin motivo registrado"}
+                              </p>
+                            )}
+                          </div>
                         </TableCell>
 
                         <TableCell>
@@ -616,7 +740,13 @@ function BusinessProductions({
                         </TableCell>
 
                         <TableCell>
-                          <StatusBadge status={settlement.estado} />
+                          {settlement.anulada ? (
+                            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                              Anulada
+                            </span>
+                          ) : (
+                            <StatusBadge status={settlement.estado} />
+                          )}
                         </TableCell>
 
                         <td className="px-6 py-4">
@@ -629,33 +759,55 @@ function BusinessProductions({
                               <Eye size={17} />
                             </button>
 
-                            {Number(settlement.pendiente || 0) > 0 && (
+                            {!settlement.anulada &&
+                              Number(settlement.pendiente || 0) > 0 && (
+                                <button
+                                  onClick={() => openPaymentModal(settlement)}
+                                  className="rounded-xl border border-blue-100 bg-blue-50 p-2 text-blue-600 hover:bg-blue-100"
+                                  title="Abonar"
+                                >
+                                  <HandCoins size={17} />
+                                </button>
+                              )}
+
+                            {!settlement.anulada &&
+                              Number(settlement.pendiente || 0) > 0 && (
+                                <button
+                                  onClick={() => markSettlementPaid(settlement)}
+                                  className="rounded-xl border border-emerald-100 bg-emerald-50 p-2 text-emerald-600 hover:bg-emerald-100"
+                                  title="Marcar pagada"
+                                >
+                                  <CheckCircle2 size={17} />
+                                </button>
+                              )}
+
+                            {settlement.anulada ? (
+                              <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">
+                                Protegida
+                              </span>
+                            ) : Number(settlement.abonado || 0) > 0 ||
+                              settlement.estado === "abonado" ||
+                              settlement.estado === "pagado" ? (
                               <button
-                                onClick={() => openPaymentModal(settlement)}
-                                className="rounded-xl border border-blue-100 bg-blue-50 p-2 text-blue-600 hover:bg-blue-100"
-                                title="Abonar"
+                                onClick={() =>
+                                  openCancelSettlementModal(settlement)
+                                }
+                                className="rounded-xl border border-orange-100 bg-orange-50 p-2 text-orange-600 hover:bg-orange-100"
+                                title="Anular liquidación"
                               >
-                                <HandCoins size={17} />
+                                <Trash2 size={17} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleDeleteSettlement(settlement)
+                                }
+                                className="rounded-xl border border-red-100 bg-red-50 p-2 text-red-600 hover:bg-red-100"
+                                title="Eliminar"
+                              >
+                                <Trash2 size={17} />
                               </button>
                             )}
-
-                            {Number(settlement.pendiente || 0) > 0 && (
-                              <button
-                                onClick={() => markSettlementPaid(settlement)}
-                                className="rounded-xl border border-emerald-100 bg-emerald-50 p-2 text-emerald-600 hover:bg-emerald-100"
-                                title="Marcar pagada"
-                              >
-                                <CheckCircle2 size={17} />
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => handleDeleteSettlement(settlement)}
-                              className="rounded-xl border border-red-100 bg-red-50 p-2 text-red-600 hover:bg-red-100"
-                              title="Eliminar"
-                            >
-                              <Trash2 size={17} />
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -796,7 +948,9 @@ function BusinessProductions({
                           ) : (
                             <ActionButtons
                               onEdit={() => openEditProductionModal(production)}
-                              onDelete={() => handleDeleteProduction(production)}
+                              onDelete={() =>
+                                handleDeleteProduction(production)
+                              }
                             />
                           )}
                         </td>
@@ -1077,7 +1231,8 @@ function BusinessProductions({
             {settlementForm.trabajador_id &&
               settlementPreview.items.length === 0 && (
                 <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
-                  No hay producción sin liquidar para esta persona en el rango seleccionado.
+                  No hay producción sin liquidar para esta persona en el rango
+                  seleccionado.
                 </div>
               )}
 
@@ -1094,7 +1249,8 @@ function BusinessProductions({
                       </p>
 
                       <p className="text-sm text-slate-500">
-                        {Number(item.kilos || 0)} × {formatMoney(item.precio_kilo)}
+                        {Number(item.kilos || 0)} ×{" "}
+                        {formatMoney(item.precio_kilo)}
                       </p>
                     </div>
 
@@ -1125,7 +1281,8 @@ function BusinessProductions({
             />
 
             <p className={helperTextClass}>
-              También puedes crear la liquidación y luego registrar abonos desde la tabla.
+              También puedes crear la liquidación y luego registrar abonos desde
+              la tabla.
             </p>
           </div>
 
@@ -1146,7 +1303,8 @@ function BusinessProductions({
           </div>
 
           <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Solo se incluirán registros diarios sin liquidar de esta persona dentro del rango seleccionado.
+            Solo se incluirán registros diarios sin liquidar de esta persona
+            dentro del rango seleccionado.
           </div>
         </ModalShell>
       )}
@@ -1181,6 +1339,33 @@ function BusinessProductions({
         </ModalShell>
       )}
 
+      {cancelModalOpen && (
+        <ModalShell
+          title="Anular liquidación"
+          description={`Esta acción conserva el historial contable de ${
+            settlementToCancel?.trabajador_nombre || "la persona"
+          }.`}
+          onClose={closeCancelSettlementModal}
+          onSubmit={handleCancelSettlement}
+          saving={saving}
+          submitText="Anular liquidación"
+        >
+          <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-700">
+            Esta liquidación tiene pagos o abonos. No se eliminará; quedará
+            marcada como anulada y sus producciones volverán a quedar
+            disponibles para una nueva liquidación.
+          </div>
+
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Motivo de anulación. Ej: error en fechas, pago registrado por equivocación..."
+            className={textareaClass}
+            required
+          />
+        </ModalShell>
+      )}
+
       {detailModalOpen && (
         <ModalShell
           title="Detalle de liquidación"
@@ -1193,6 +1378,22 @@ function BusinessProductions({
           saving={false}
           submitText="Cerrar"
         >
+          {settlementDetail?.anulada && (
+            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-700">
+              <p className="font-bold">Liquidación anulada</p>
+              <p className="mt-1">
+                Motivo:{" "}
+                {settlementDetail.motivo_anulacion || "Sin motivo registrado"}
+              </p>
+              {settlementDetail.fecha_anulacion && (
+                <p className="mt-1">
+                  Fecha de anulación:{" "}
+                  {formatDate(settlementDetail.fecha_anulacion)}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-3 rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
             <p>
               <strong>Periodo:</strong>{" "}

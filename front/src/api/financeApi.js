@@ -451,3 +451,15 @@ export const getBusinessReports = async (businessId) => {
   return data;
 };
 
+export const cancelBusinessSettlement = async (
+  businessId,
+  settlementId,
+  motivo
+) => {
+  const response = await api.patch(
+    `/businesses/${businessId}/settlements/${settlementId}/cancel`,
+    { motivo }
+  );
+
+  return response.data;
+};

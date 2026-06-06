@@ -267,6 +267,18 @@ const deleteSettlement = async (req, res) => {
       });
     }
 
+    if (
+      liquidacion.anulada ||
+      Number(liquidacion.abonado || 0) > 0 ||
+      liquidacion.estado === "abonado" ||
+      liquidacion.estado === "pagado"
+    ) {
+      return res.status(400).json({
+        message:
+          "No puedes eliminar una liquidación abonada, pagada o anulada. Usa anulación para conservar el historial contable.",
+      });
+    }
+
     await ProduccionNegocio.updateMany(
       {
         usuario_id,
@@ -292,6 +304,68 @@ const deleteSettlement = async (req, res) => {
     });
   }
 };
+const cancelSettlement = async (req, res) => {
+  try {
+    const usuario_id = getUsuarioId(req);
+    const { businessId, settlementId } = req.params;
+    const { motivo } = req.body;
+
+    if (!motivo || !motivo.trim()) {
+      return res.status(400).json({
+        message: "El motivo de anulación es obligatorio",
+      });
+    }
+
+    const liquidacion = await LiquidacionNegocio.findOne({
+      _id: settlementId,
+      usuario_id,
+      negocio_id: businessId,
+    });
+
+    if (!liquidacion) {
+      return res.status(404).json({
+        message: "Liquidación no encontrada",
+      });
+    }
+
+    if (liquidacion.anulada) {
+      return res.status(400).json({
+        message: "Esta liquidación ya está anulada",
+      });
+    }
+
+    liquidacion.anulada = true;
+    liquidacion.fecha_anulacion = new Date();
+    liquidacion.motivo_anulacion = motivo.trim();
+    liquidacion.anulada_por =
+      req.usuario?.nombre || req.usuario?.email || String(usuario_id);
+
+    await liquidacion.save();
+
+    await ProduccionNegocio.updateMany(
+      {
+        usuario_id,
+        negocio_id: businessId,
+        liquidacion_id: liquidacion._id,
+      },
+      {
+        $set: {
+          liquidacion_id: null,
+        },
+      }
+    );
+
+    res.status(200).json({
+      message: "Liquidación anulada correctamente",
+      data: liquidacion,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error anulando liquidación",
+      error: error.message,
+    });
+  }
+};
 
 module.exports = {
   createSettlement,
@@ -300,4 +374,5 @@ module.exports = {
   addSettlementPayment,
   markSettlementAsPaid,
   deleteSettlement,
+  cancelSettlement,
 };

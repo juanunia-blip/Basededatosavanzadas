@@ -3,6 +3,35 @@ const ProduccionNegocio = require("../../models/BusinessProductionModel");
 
 const { getUsuarioId, validarNegocio } = require("./helpers");
 
+const calcularValoresProduccion = ({ kilos, precio_kilo, abonado = 0 }) => {
+  const kilosNumber = Number(kilos || 0);
+  const precioKiloNumber = Number(precio_kilo || 0);
+  const abonadoNumber = Number(abonado || 0);
+
+  const total_pago = kilosNumber * precioKiloNumber;
+  const abonadoFinal = Math.min(abonadoNumber, total_pago);
+  const pendiente = Math.max(total_pago - abonadoFinal, 0);
+
+  let estado = "pendiente";
+
+  if (abonadoFinal > 0 && abonadoFinal < total_pago) {
+    estado = "abonado";
+  }
+
+  if (total_pago > 0 && abonadoFinal >= total_pago) {
+    estado = "pagado";
+  }
+
+  return {
+    kilos: kilosNumber,
+    precio_kilo: precioKiloNumber,
+    total_pago,
+    abonado: abonadoFinal,
+    pendiente,
+    estado,
+  };
+};
+
 const addProduction = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
@@ -41,15 +70,19 @@ const addProduction = async (req, res) => {
       });
     }
 
+    const valoresProduccion = calcularValoresProduccion({
+      kilos,
+      precio_kilo,
+      abonado,
+    });
+
     const produccion = await ProduccionNegocio.create({
       usuario_id,
       negocio_id: negocio._id,
       trabajador_id: trabajador._id,
       trabajador_nombre: trabajador.nombre,
       fecha,
-      kilos: Number(kilos),
-      precio_kilo: Number(precio_kilo),
-      abonado: Number(abonado || 0),
+      ...valoresProduccion,
       observacion: observacion || "",
       liquidacion_id: null,
     });
@@ -90,6 +123,9 @@ const updateProduction = async (req, res) => {
     delete req.body.usuario_id;
     delete req.body.negocio_id;
     delete req.body.liquidacion_id;
+    delete req.body.total_pago;
+    delete req.body.pendiente;
+    delete req.body.estado;
 
     const produccionExistente = await ProduccionNegocio.findOne({
       _id: productionId,
@@ -110,11 +146,31 @@ const updateProduction = async (req, res) => {
       });
     }
 
-    if (req.body.kilos !== undefined) req.body.kilos = Number(req.body.kilos);
-    if (req.body.precio_kilo !== undefined)
-      req.body.precio_kilo = Number(req.body.precio_kilo);
-    if (req.body.abonado !== undefined)
-      req.body.abonado = Number(req.body.abonado);
+    const kilosFinal =
+      req.body.kilos !== undefined
+        ? Number(req.body.kilos)
+        : Number(produccionExistente.kilos || 0);
+
+    const precioKiloFinal =
+      req.body.precio_kilo !== undefined
+        ? Number(req.body.precio_kilo)
+        : Number(produccionExistente.precio_kilo || 0);
+
+    const abonadoFinal =
+      req.body.abonado !== undefined
+        ? Number(req.body.abonado)
+        : Number(produccionExistente.abonado || 0);
+
+    const valoresProduccion = calcularValoresProduccion({
+      kilos: kilosFinal,
+      precio_kilo: precioKiloFinal,
+      abonado: abonadoFinal,
+    });
+
+    const payload = {
+      ...req.body,
+      ...valoresProduccion,
+    };
 
     const produccion = await ProduccionNegocio.findOneAndUpdate(
       {
@@ -122,7 +178,7 @@ const updateProduction = async (req, res) => {
         negocio_id: businessId,
         usuario_id,
       },
-      req.body,
+      payload,
       {
         new: true,
         runValidators: true,
@@ -209,22 +265,20 @@ const addProductionPayment = async (req, res) => {
       });
     }
 
-    produccion.abonado = Number(produccion.abonado || 0) + aporte;
+    const nuevoAbonado = Number(produccion.abonado || 0) + aporte;
 
-    if (produccion.abonado > produccion.total_pago) {
-      produccion.abonado = produccion.total_pago;
-    }
+    const valoresProduccion = calcularValoresProduccion({
+      kilos: produccion.kilos,
+      precio_kilo: produccion.precio_kilo,
+      abonado: nuevoAbonado,
+    });
 
-    produccion.pendiente =
-      Number(produccion.total_pago || 0) - Number(produccion.abonado || 0);
-
-    if (produccion.abonado <= 0) {
-      produccion.estado = "pendiente";
-    } else if (produccion.abonado < produccion.total_pago) {
-      produccion.estado = "abonado";
-    } else {
-      produccion.estado = "pagado";
-    }
+    produccion.kilos = valoresProduccion.kilos;
+    produccion.precio_kilo = valoresProduccion.precio_kilo;
+    produccion.total_pago = valoresProduccion.total_pago;
+    produccion.abonado = valoresProduccion.abonado;
+    produccion.pendiente = valoresProduccion.pendiente;
+    produccion.estado = valoresProduccion.estado;
 
     await produccion.save();
 

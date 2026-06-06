@@ -26,6 +26,7 @@ const {
   getSettlementById,
   addSettlementPayment,
   markSettlementAsPaid,
+  cancelSettlement,
   deleteSettlement,
   getUnsettledProductions,
 
@@ -233,6 +234,12 @@ router.get(
   "/businesses/:businessId/reports",
   protect,
   getBusinessReports
+);
+
+router.patch(
+  "/businesses/:businessId/settlements/:settlementId/cancel",
+  protect,
+  cancelSettlement
 );
 
 module.exports = router;
