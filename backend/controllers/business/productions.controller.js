@@ -3,10 +3,15 @@ const ProduccionNegocio = require("../../models/BusinessProductionModel");
 
 const { getUsuarioId, validarNegocio } = require("./helpers");
 
+const toNumber = (value) => {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+};
+
 const calcularValoresProduccion = ({ kilos, precio_kilo, abonado = 0 }) => {
-  const kilosNumber = Number(kilos || 0);
-  const precioKiloNumber = Number(precio_kilo || 0);
-  const abonadoNumber = Number(abonado || 0);
+  const kilosNumber = toNumber(kilos);
+  const precioKiloNumber = toNumber(precio_kilo);
+  const abonadoNumber = Math.max(toNumber(abonado), 0);
 
   const total_pago = kilosNumber * precioKiloNumber;
   const abonadoFinal = Math.min(abonadoNumber, total_pago);
@@ -32,6 +37,17 @@ const calcularValoresProduccion = ({ kilos, precio_kilo, abonado = 0 }) => {
   };
 };
 
+const validarValoresProduccion = ({ kilos, precio_kilo }) => {
+  const kilosNumber = toNumber(kilos);
+  const precioKiloNumber = toNumber(precio_kilo);
+
+  if (kilosNumber <= 0 || precioKiloNumber <= 0) {
+    return "Los kilos y el precio por kilo deben ser mayores que cero";
+  }
+
+  return null;
+};
+
 const addProduction = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
@@ -47,6 +63,17 @@ const addProduction = async (req, res) => {
     ) {
       return res.status(400).json({
         message: "trabajador_id, fecha, kilos y precio_kilo son obligatorios",
+      });
+    }
+
+    const validationError = validarValoresProduccion({
+      kilos,
+      precio_kilo,
+    });
+
+    if (validationError) {
+      return res.status(400).json({
+        message: validationError,
       });
     }
 
@@ -142,24 +169,35 @@ const updateProduction = async (req, res) => {
     if (produccionExistente.liquidacion_id) {
       return res.status(400).json({
         message:
-          "No puedes editar una producción que ya pertenece a una liquidación. Elimina la liquidación primero.",
+          "No puedes editar una producción que ya pertenece a una liquidación. Elimina o anula la liquidación primero.",
       });
     }
 
     const kilosFinal =
       req.body.kilos !== undefined
-        ? Number(req.body.kilos)
-        : Number(produccionExistente.kilos || 0);
+        ? toNumber(req.body.kilos)
+        : toNumber(produccionExistente.kilos);
 
     const precioKiloFinal =
       req.body.precio_kilo !== undefined
-        ? Number(req.body.precio_kilo)
-        : Number(produccionExistente.precio_kilo || 0);
+        ? toNumber(req.body.precio_kilo)
+        : toNumber(produccionExistente.precio_kilo);
 
     const abonadoFinal =
       req.body.abonado !== undefined
-        ? Number(req.body.abonado)
-        : Number(produccionExistente.abonado || 0);
+        ? toNumber(req.body.abonado)
+        : toNumber(produccionExistente.abonado);
+
+    const validationError = validarValoresProduccion({
+      kilos: kilosFinal,
+      precio_kilo: precioKiloFinal,
+    });
+
+    if (validationError) {
+      return res.status(400).json({
+        message: validationError,
+      });
+    }
 
     const valoresProduccion = calcularValoresProduccion({
       kilos: kilosFinal,
@@ -171,6 +209,23 @@ const updateProduction = async (req, res) => {
       ...req.body,
       ...valoresProduccion,
     };
+
+    if (req.body.trabajador_id) {
+      const trabajador = await TrabajadorNegocio.findOne({
+        _id: req.body.trabajador_id,
+        usuario_id,
+        negocio_id: businessId,
+      });
+
+      if (!trabajador) {
+        return res.status(404).json({
+          message: "Trabajador no encontrado",
+        });
+      }
+
+      payload.trabajador_id = trabajador._id;
+      payload.trabajador_nombre = trabajador.nombre;
+    }
 
     const produccion = await ProduccionNegocio.findOneAndUpdate(
       {
@@ -217,7 +272,7 @@ const deleteProduction = async (req, res) => {
     if (produccion.liquidacion_id) {
       return res.status(400).json({
         message:
-          "No puedes eliminar una producción que ya pertenece a una liquidación. Elimina la liquidación primero.",
+          "No puedes eliminar una producción que ya pertenece a una liquidación. Elimina o anula la liquidación primero.",
       });
     }
 
@@ -238,9 +293,9 @@ const addProductionPayment = async (req, res) => {
   try {
     const { businessId, productionId } = req.params;
     const usuario_id = getUsuarioId(req);
-    const aporte = Number(req.body.monto);
+    const aporte = toNumber(req.body.monto);
 
-    if (isNaN(aporte) || aporte <= 0) {
+    if (aporte <= 0) {
       return res.status(400).json({
         message: "El abono debe ser mayor que cero",
       });
@@ -265,7 +320,7 @@ const addProductionPayment = async (req, res) => {
       });
     }
 
-    const nuevoAbonado = Number(produccion.abonado || 0) + aporte;
+    const nuevoAbonado = toNumber(produccion.abonado) + aporte;
 
     const valoresProduccion = calcularValoresProduccion({
       kilos: produccion.kilos,
@@ -313,7 +368,9 @@ const getUnsettledProductions = async (req, res) => {
     if (fecha_inicio || fecha_fin) {
       query.fecha = {};
 
-      if (fecha_inicio) query.fecha.$gte = new Date(fecha_inicio);
+      if (fecha_inicio) {
+        query.fecha.$gte = new Date(fecha_inicio);
+      }
 
       if (fecha_fin) {
         const fin = new Date(fecha_fin);

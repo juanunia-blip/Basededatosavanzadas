@@ -11,6 +11,10 @@ const {
   addToPeriod,
 } = require("./helpers");
 
+/* =========================
+   REPORTS
+========================= */
+
 const getBusinessReports = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
@@ -24,21 +28,44 @@ const getBusinessReports = async (req, res) => {
       });
     }
 
-    const [
-      ventas,
-      gastos,
-      liquidaciones,
-      producciones,
-      trabajadores,
-    ] = await Promise.all([
-      VentaNegocio.find({ usuario_id, negocio_id }).sort({ fecha: -1 }),
-      GastoNegocio.find({ usuario_id, negocio_id }).sort({ fecha: -1 }),
-      LiquidacionNegocio.find({ usuario_id, negocio_id }).sort({
-        fecha_inicio: -1,
-      }),
-      ProduccionNegocio.find({ usuario_id, negocio_id }).sort({ fecha: -1 }),
-      TrabajadorNegocio.find({ usuario_id, negocio_id }),
-    ]);
+    const [ventas, gastos, liquidaciones, producciones, trabajadores] =
+      await Promise.all([
+        VentaNegocio.find({
+          usuario_id,
+          negocio_id,
+        }).sort({ fecha: -1 }),
+
+        GastoNegocio.find({
+          usuario_id,
+          negocio_id,
+        }).sort({ fecha: -1 }),
+
+        /*
+          Traemos todas para historial, pero para cálculos usamos solo activas.
+        */
+        LiquidacionNegocio.find({
+          usuario_id,
+          negocio_id,
+        }).sort({ fecha_inicio: -1 }),
+
+        ProduccionNegocio.find({
+          usuario_id,
+          negocio_id,
+        }).sort({ fecha: -1 }),
+
+        TrabajadorNegocio.find({
+          usuario_id,
+          negocio_id,
+        }),
+      ]);
+
+    const liquidacionesActivas = liquidaciones.filter(
+      (item) => !item.anulada
+    );
+
+    const liquidacionesAnuladas = liquidaciones.filter(
+      (item) => item.anulada
+    );
 
     const totalVentas = ventas.reduce(
       (sum, item) => sum + Number(item.total_venta || 0),
@@ -50,7 +77,11 @@ const getBusinessReports = async (req, res) => {
       0
     );
 
-    const totalGastosTrabajadores = liquidaciones.reduce(
+    /*
+      Regla contable:
+      Trabajadores = dinero realmente abonado/pagado en liquidaciones activas.
+    */
+    const totalGastosTrabajadores = liquidacionesActivas.reduce(
       (sum, item) => sum + Number(item.abonado || 0),
       0
     );
@@ -59,7 +90,7 @@ const getBusinessReports = async (req, res) => {
       Number(totalGastosOperativos || 0) +
       Number(totalGastosTrabajadores || 0);
 
-    const utilidadNeta = Number(totalVentas || 0) - totalGastos;
+    const utilidadNeta = Number(totalVentas || 0) - Number(totalGastos || 0);
 
     const totalKilosVendidos = ventas.reduce(
       (sum, item) => sum + Number(item.kilos || item.cantidad || 0),
@@ -85,29 +116,17 @@ const getBusinessReports = async (req, res) => {
       0
     );
 
-    const liquidacionesPagadas = liquidaciones.filter(
-      (item) => item.estado === "pagado"
-    );
-
-    const liquidacionesAbonadas = liquidaciones.filter(
-      (item) => item.estado === "abonado"
-    );
-
-    const liquidacionesPendientes = liquidaciones.filter(
-      (item) => item.estado === "pendiente"
-    );
-
-    const totalLiquidado = liquidaciones.reduce(
+    const totalLiquidado = liquidacionesActivas.reduce(
       (sum, item) => sum + Number(item.total_pago || 0),
       0
     );
 
-    const totalAbonado = liquidaciones.reduce(
+    const totalAbonado = liquidacionesActivas.reduce(
       (sum, item) => sum + Number(item.abonado || 0),
       0
     );
 
-    const totalPendienteTrabajadores = liquidaciones.reduce(
+    const totalPendienteTrabajadores = liquidacionesActivas.reduce(
       (sum, item) => sum + Number(item.pendiente || 0),
       0
     );
@@ -134,9 +153,11 @@ const getBusinessReports = async (req, res) => {
       ventasPorProductoMap[producto].kilos += Number(
         venta.kilos || venta.cantidad || 0
       );
+
       ventasPorProductoMap[producto].cantidad += Number(
         venta.cantidad || venta.kilos || 0
       );
+
       ventasPorProductoMap[producto].total += Number(venta.total_venta || 0);
       ventasPorProductoMap[producto].ventas += 1;
     });
@@ -162,8 +183,9 @@ const getBusinessReports = async (req, res) => {
       gastosPorTipoMap.trabajadores = {
         tipo: "trabajadores",
         total: totalGastosTrabajadores,
-        registros: liquidaciones.filter((item) => Number(item.abonado || 0) > 0)
-          .length,
+        registros: liquidacionesActivas.filter(
+          (item) => Number(item.abonado || 0) > 0
+        ).length,
         calculado: true,
       };
     }
@@ -192,9 +214,11 @@ const getBusinessReports = async (req, res) => {
       produccionPorTrabajadorMap[trabajadorId].kilos += Number(
         produccion.kilos || 0
       );
+
       produccionPorTrabajadorMap[trabajadorId].total_pago += Number(
         produccion.total_pago || 0
       );
+
       produccionPorTrabajadorMap[trabajadorId].registros += 1;
 
       if (!produccion.liquidacion_id) {
@@ -217,7 +241,10 @@ const getBusinessReports = async (req, res) => {
       });
     });
 
-    liquidaciones.forEach((liquidacion) => {
+    /*
+      Solo liquidaciones activas cuentan como gasto de trabajadores por mes.
+    */
+    liquidacionesActivas.forEach((liquidacion) => {
       addToPeriod(detalleMensualMap, getMonthKey(liquidacion.fecha_fin), {
         gastosTrabajadores: Number(liquidacion.abonado || 0),
         liquidaciones: 1,
@@ -271,17 +298,25 @@ const getBusinessReports = async (req, res) => {
           totalTrabajadores: trabajadores.length,
 
           liquidaciones: {
-            total: liquidaciones.length,
-            pagadas: liquidacionesPagadas.length,
-            abonadas: liquidacionesAbonadas.length,
-            pendientes: liquidacionesPendientes.length,
+            total: liquidacionesActivas.length,
+            anuladas: liquidacionesAnuladas.length,
+            pagadas: liquidacionesActivas.filter(
+              (item) => item.estado === "pagado"
+            ).length,
+            abonadas: liquidacionesActivas.filter(
+              (item) => item.estado === "abonado"
+            ).length,
+            pendientes: liquidacionesActivas.filter(
+              (item) => item.estado === "pendiente"
+            ).length,
           },
 
           registros: {
             ventas: ventas.length,
             gastos: gastos.length,
             producciones: producciones.length,
-            liquidaciones: liquidaciones.length,
+            liquidaciones: liquidacionesActivas.length,
+            liquidacionesAnuladas: liquidacionesAnuladas.length,
           },
         },
 
@@ -293,7 +328,13 @@ const getBusinessReports = async (req, res) => {
         ultimosMovimientos: {
           ventas: ventas.slice(0, 5),
           gastos: gastos.slice(0, 5),
+
+          /*
+            Para historial visual podemos mostrar todas,
+            incluso anuladas.
+          */
           liquidaciones: liquidaciones.slice(0, 5),
+
           producciones: producciones.slice(0, 5),
         },
       },

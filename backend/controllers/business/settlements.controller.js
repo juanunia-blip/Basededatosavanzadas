@@ -4,6 +4,36 @@ const LiquidacionNegocio = require("../../models/BusinessSettlementModel");
 
 const { getUsuarioId, validarNegocio } = require("./helpers");
 
+/* =========================
+   HELPERS
+========================= */
+
+const getRegistradoPor = (req, usuario_id) => {
+  return req.usuario?.nombre || req.usuario?.email || String(usuario_id);
+};
+
+const recalcularLiquidacion = (liquidacion) => {
+  const totalPago = Number(liquidacion.total_pago || 0);
+  const abonado = Math.min(Number(liquidacion.abonado || 0), totalPago);
+
+  liquidacion.abonado = abonado;
+  liquidacion.pendiente = Math.max(totalPago - abonado, 0);
+
+  if (liquidacion.anulada) return;
+
+  if (abonado <= 0) {
+    liquidacion.estado = "pendiente";
+  } else if (abonado < totalPago) {
+    liquidacion.estado = "abonado";
+  } else {
+    liquidacion.estado = "pagado";
+  }
+};
+
+/* =========================
+   SETTLEMENTS / LIQUIDACIONES
+========================= */
+
 const createSettlement = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
@@ -16,6 +46,7 @@ const createSettlement = async (req, res) => {
       periodo = "semana",
       abonado = 0,
       observacion,
+      medio_pago = "",
     } = req.body;
 
     if (!trabajador_id || !fecha_inicio || !fecha_fin) {
@@ -87,6 +118,19 @@ const createSettlement = async (req, res) => {
 
     const abonoInicial = Math.min(Number(abonado || 0), total_pago);
 
+    const pagos =
+      abonoInicial > 0
+        ? [
+            {
+              monto: abonoInicial,
+              fecha: new Date(),
+              observacion: "Abono inicial registrado al crear la liquidación",
+              medio_pago,
+              registrado_por: getRegistradoPor(req, usuario_id),
+            },
+          ]
+        : [];
+
     const liquidacion = await LiquidacionNegocio.create({
       usuario_id,
       negocio_id: businessId,
@@ -100,8 +144,19 @@ const createSettlement = async (req, res) => {
       total_pago,
       abonado: abonoInicial,
       pendiente: Math.max(total_pago - abonoInicial, 0),
+      estado:
+        abonoInicial <= 0
+          ? "pendiente"
+          : abonoInicial < total_pago
+          ? "abonado"
+          : "pagado",
+      pagos,
       producciones: producciones.map((item) => item._id),
       observacion: observacion || "",
+      anulada: false,
+      fecha_anulacion: null,
+      motivo_anulacion: "",
+      anulada_por: "",
     });
 
     await ProduccionNegocio.updateMany(
@@ -178,9 +233,11 @@ const addSettlementPayment = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
     const { businessId, settlementId } = req.params;
-    const monto = Number(req.body.monto);
+    const { observacion = "", medio_pago = "" } = req.body;
 
-    if (isNaN(monto) || monto <= 0) {
+    const montoSolicitado = Number(req.body.monto);
+
+    if (isNaN(montoSolicitado) || montoSolicitado <= 0) {
       return res.status(400).json({
         message: "El abono debe ser mayor que cero",
       });
@@ -198,11 +255,38 @@ const addSettlementPayment = async (req, res) => {
       });
     }
 
-    liquidacion.abonado = Number(liquidacion.abonado || 0) + monto;
-
-    if (liquidacion.abonado > liquidacion.total_pago) {
-      liquidacion.abonado = liquidacion.total_pago;
+    if (liquidacion.anulada) {
+      return res.status(400).json({
+        message: "No puedes abonar una liquidación anulada",
+      });
     }
+
+    const totalPago = Number(liquidacion.total_pago || 0);
+    const abonadoActual = Number(liquidacion.abonado || 0);
+    const pendienteActual = Math.max(totalPago - abonadoActual, 0);
+
+    if (pendienteActual <= 0) {
+      return res.status(400).json({
+        message: "Esta liquidación ya está pagada",
+      });
+    }
+
+    const montoAplicado = Math.min(montoSolicitado, pendienteActual);
+
+    liquidacion.abonado = abonadoActual + montoAplicado;
+
+    liquidacion.pagos = [
+      ...(liquidacion.pagos || []),
+      {
+        monto: montoAplicado,
+        fecha: new Date(),
+        observacion,
+        medio_pago,
+        registrado_por: getRegistradoPor(req, usuario_id),
+      },
+    ];
+
+    recalcularLiquidacion(liquidacion);
 
     await liquidacion.save();
 
@@ -235,7 +319,37 @@ const markSettlementAsPaid = async (req, res) => {
       });
     }
 
-    liquidacion.abonado = Number(liquidacion.total_pago || 0);
+    if (liquidacion.anulada) {
+      return res.status(400).json({
+        message: "No puedes marcar como pagada una liquidación anulada",
+      });
+    }
+
+    const totalPago = Number(liquidacion.total_pago || 0);
+    const abonadoActual = Number(liquidacion.abonado || 0);
+    const pendienteActual = Math.max(totalPago - abonadoActual, 0);
+
+    if (pendienteActual <= 0) {
+      return res.status(400).json({
+        message: "Esta liquidación ya está pagada",
+      });
+    }
+
+    liquidacion.abonado = totalPago;
+
+    liquidacion.pagos = [
+      ...(liquidacion.pagos || []),
+      {
+        monto: pendienteActual,
+        fecha: new Date(),
+        observacion: "Pago final al marcar la liquidación como pagada",
+        medio_pago: "",
+        registrado_por: getRegistradoPor(req, usuario_id),
+      },
+    ];
+
+    recalcularLiquidacion(liquidacion);
+
     await liquidacion.save();
 
     res.status(200).json({
@@ -267,9 +381,13 @@ const deleteSettlement = async (req, res) => {
       });
     }
 
+    const tienePagos =
+      Number(liquidacion.abonado || 0) > 0 ||
+      (liquidacion.pagos || []).length > 0;
+
     if (
       liquidacion.anulada ||
-      Number(liquidacion.abonado || 0) > 0 ||
+      tienePagos ||
       liquidacion.estado === "abonado" ||
       liquidacion.estado === "pagado"
     ) {
@@ -304,13 +422,16 @@ const deleteSettlement = async (req, res) => {
     });
   }
 };
+
 const cancelSettlement = async (req, res) => {
   try {
     const usuario_id = getUsuarioId(req);
     const { businessId, settlementId } = req.params;
-    const { motivo } = req.body;
+    const { motivo, motivo_anulacion } = req.body;
 
-    if (!motivo || !motivo.trim()) {
+    const motivoFinal = String(motivo || motivo_anulacion || "").trim();
+
+    if (!motivoFinal) {
       return res.status(400).json({
         message: "El motivo de anulación es obligatorio",
       });
@@ -336,9 +457,8 @@ const cancelSettlement = async (req, res) => {
 
     liquidacion.anulada = true;
     liquidacion.fecha_anulacion = new Date();
-    liquidacion.motivo_anulacion = motivo.trim();
-    liquidacion.anulada_por =
-      req.usuario?.nombre || req.usuario?.email || String(usuario_id);
+    liquidacion.motivo_anulacion = motivoFinal;
+    liquidacion.anulada_por = getRegistradoPor(req, usuario_id);
 
     await liquidacion.save();
 

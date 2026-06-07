@@ -85,7 +85,10 @@ function BusinessProductions({
 
   const [selectedSettlement, setSelectedSettlement] = useState(null);
   const [settlementDetail, setSettlementDetail] = useState(null);
+
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("efectivo");
+  const [paymentObservation, setPaymentObservation] = useState("");
 
   const [productionForm, setProductionForm] = useState({
     trabajador_id: "",
@@ -242,7 +245,7 @@ function BusinessProductions({
   const openEditProductionModal = (production) => {
     if (production.liquidacion_id) {
       alert(
-        "Esta producción ya está liquidada. Para modificarla, elimina primero la liquidación."
+        "Esta producción ya está liquidada. Para modificarla, elimina o anula primero la liquidación."
       );
       return;
     }
@@ -326,7 +329,7 @@ function BusinessProductions({
   const handleDeleteProduction = async (production) => {
     if (production.liquidacion_id) {
       alert(
-        "Esta producción ya está liquidada. Para eliminarla, elimina primero la liquidación."
+        "Esta producción ya está liquidada. Para eliminarla, elimina o anula primero la liquidación."
       );
       return;
     }
@@ -428,14 +431,23 @@ function BusinessProductions({
       return;
     }
 
+    if (Number(settlement.pendiente || 0) <= 0) {
+      alert("Esta liquidación ya está pagada.");
+      return;
+    }
+
     setSelectedSettlement(settlement);
     setPaymentAmount("");
+    setPaymentMethod("efectivo");
+    setPaymentObservation("");
     setPaymentModalOpen(true);
   };
 
   const closePaymentModal = () => {
     setSelectedSettlement(null);
     setPaymentAmount("");
+    setPaymentMethod("efectivo");
+    setPaymentObservation("");
     setPaymentModalOpen(false);
   };
 
@@ -452,11 +464,11 @@ function BusinessProductions({
     try {
       setSaving(true);
 
-      await addBusinessSettlementPayment(
-        business._id,
-        selectedSettlement._id,
-        monto
-      );
+      await addBusinessSettlementPayment(business._id, selectedSettlement._id, {
+        monto,
+        medio_pago: paymentMethod,
+        observacion: paymentObservation,
+      });
 
       closePaymentModal();
       await loadData();
@@ -471,6 +483,11 @@ function BusinessProductions({
   const markSettlementPaid = async (settlement) => {
     if (settlement.anulada) {
       alert("No puedes marcar como pagada una liquidación anulada.");
+      return;
+    }
+
+    if (Number(settlement.pendiente || 0) <= 0) {
+      alert("Esta liquidación ya está pagada.");
       return;
     }
 
@@ -570,6 +587,7 @@ function BusinessProductions({
         business._id,
         settlement._id
       );
+
       setSettlementDetail(detail);
       setDetailModalOpen(true);
     } catch (error) {
@@ -1327,15 +1345,47 @@ function BusinessProductions({
             </p>
           </div>
 
-          <input
-            type="number"
-            min="0"
-            value={paymentAmount}
-            onChange={(e) => setPaymentAmount(e.target.value)}
-            placeholder="Monto del abono"
-            className={fieldClass}
-            required
-          />
+          <div>
+            <label className={labelClass}>Monto del abono</label>
+
+            <input
+              type="number"
+              min="0"
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+              placeholder="Ej: 50000"
+              className={fieldClass}
+              required
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Medio de pago</label>
+
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              className={selectClass}
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="nequi">Nequi</option>
+              <option value="daviplata">Daviplata</option>
+              <option value="banco">Banco</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={labelClass}>Observación</label>
+
+            <textarea
+              value={paymentObservation}
+              onChange={(e) => setPaymentObservation(e.target.value)}
+              placeholder="Ej: abono parcial, pago por transferencia, pago realizado en efectivo..."
+              className={textareaClass}
+            />
+          </div>
         </ModalShell>
       )}
 
@@ -1377,6 +1427,7 @@ function BusinessProductions({
           }}
           saving={false}
           submitText="Cerrar"
+          maxWidth="max-w-3xl"
         >
           {settlementDetail?.anulada && (
             <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-700">
@@ -1385,10 +1436,17 @@ function BusinessProductions({
                 Motivo:{" "}
                 {settlementDetail.motivo_anulacion || "Sin motivo registrado"}
               </p>
+
               {settlementDetail.fecha_anulacion && (
                 <p className="mt-1">
                   Fecha de anulación:{" "}
                   {formatDate(settlementDetail.fecha_anulacion)}
+                </p>
+              )}
+
+              {settlementDetail.anulada_por && (
+                <p className="mt-1">
+                  Anulada por: {settlementDetail.anulada_por}
                 </p>
               )}
             </div>
@@ -1400,43 +1458,106 @@ function BusinessProductions({
               {formatDate(settlementDetail?.fecha_inicio)} -{" "}
               {formatDate(settlementDetail?.fecha_fin)}
             </p>
+
             <p>
               <strong>Total:</strong>{" "}
               {formatMoney(settlementDetail?.total_pago || 0)}
             </p>
+
             <p>
               <strong>Abonado:</strong>{" "}
               {formatMoney(settlementDetail?.abonado || 0)}
             </p>
+
             <p>
               <strong>Pendiente:</strong>{" "}
               {formatMoney(settlementDetail?.pendiente || 0)}
             </p>
           </div>
 
-          <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200">
-            {(settlementDetail?.producciones || []).map((item) => (
-              <div
-                key={item._id}
-                className="border-b border-slate-100 p-4 last:border-b-0"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {formatDate(item.fecha)}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {Number(item.kilos || 0)} x{" "}
-                      {formatMoney(item.precio_kilo)}
-                    </p>
-                  </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <h3 className="font-bold text-slate-950">Historial de pagos</h3>
 
-                  <strong className="text-slate-900">
-                    {formatMoney(item.total_pago)}
-                  </strong>
-                </div>
+            {(settlementDetail?.pagos || []).length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                Esta liquidación aún no tiene pagos registrados.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {settlementDetail.pagos.map((pago, index) => (
+                  <div
+                    key={`${pago.fecha}-${index}`}
+                    className="rounded-2xl bg-slate-50 px-4 py-3"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-bold text-slate-950">
+                          {formatMoney(pago.monto)}
+                        </p>
+
+                        <p className="text-sm text-slate-500">
+                          {formatDate(pago.fecha)}
+                        </p>
+                      </div>
+
+                      <span className="w-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold capitalize text-blue-700">
+                        {pago.medio_pago || "sin medio"}
+                      </span>
+                    </div>
+
+                    {pago.observacion && (
+                      <p className="mt-2 text-sm text-slate-600">
+                        {pago.observacion}
+                      </p>
+                    )}
+
+                    {pago.registrado_por && (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Registrado por: {pago.registrado_por}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+          </div>
+
+          <div>
+            <h3 className="mb-3 font-bold text-slate-950">
+              Producciones incluidas
+            </h3>
+
+            <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200">
+              {(settlementDetail?.producciones || []).map((item) => (
+                <div
+                  key={item._id}
+                  className="border-b border-slate-100 p-4 last:border-b-0"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {formatDate(item.fecha)}
+                      </p>
+
+                      <p className="text-sm text-slate-500">
+                        {Number(item.kilos || 0)} x{" "}
+                        {formatMoney(item.precio_kilo)}
+                      </p>
+                    </div>
+
+                    <strong className="text-slate-900">
+                      {formatMoney(item.total_pago)}
+                    </strong>
+                  </div>
+                </div>
+              ))}
+
+              {(settlementDetail?.producciones || []).length === 0 && (
+                <p className="p-4 text-sm text-slate-500">
+                  No hay producciones asociadas para mostrar.
+                </p>
+              )}
+            </div>
           </div>
         </ModalShell>
       )}

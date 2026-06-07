@@ -1,9 +1,13 @@
-const ProduccionNegocio = require("../../models/BusinessProductionModel");
-const GastoNegocio = require("../../models/BusinessExpenseModel");
 const VentaNegocio = require("../../models/BusinessSaleModel");
+const GastoNegocio = require("../../models/BusinessExpenseModel");
+const ProduccionNegocio = require("../../models/BusinessProductionModel");
 const LiquidacionNegocio = require("../../models/BusinessSettlementModel");
 
 const { getUsuarioId, validarNegocio } = require("./helpers");
+
+/* =========================
+   SUMMARY
+========================= */
 
 const getBusinessSummary = async (req, res) => {
   try {
@@ -20,9 +24,30 @@ const getBusinessSummary = async (req, res) => {
 
     const [ventas, gastos, liquidaciones, produccionesSinLiquidar] =
       await Promise.all([
-        VentaNegocio.find({ usuario_id, negocio_id }),
-        GastoNegocio.find({ usuario_id, negocio_id }),
-        LiquidacionNegocio.find({ usuario_id, negocio_id }),
+        VentaNegocio.find({
+          usuario_id,
+          negocio_id,
+        }),
+
+        GastoNegocio.find({
+          usuario_id,
+          negocio_id,
+        }),
+
+        /*
+          Regla contable:
+          Las liquidaciones anuladas NO cuentan para:
+          - gastos de trabajadores
+          - deuda pendiente
+          - utilidad neta
+          - total abonado
+        */
+        LiquidacionNegocio.find({
+          usuario_id,
+          negocio_id,
+          anulada: { $ne: true },
+        }),
+
         ProduccionNegocio.find({
           usuario_id,
           negocio_id,
@@ -40,6 +65,11 @@ const getBusinessSummary = async (req, res) => {
       0
     );
 
+    /*
+      Regla correcta:
+      Solo cuenta dinero realmente pagado o abonado.
+      No usamos total_pago porque eso incluye deuda no pagada.
+    */
     const totalPagoTrabajadores = liquidaciones.reduce(
       (sum, item) => sum + Number(item.abonado || 0),
       0
@@ -63,10 +93,10 @@ const getBusinessSummary = async (req, res) => {
     );
 
     const totalGastosConTrabajadores =
-      totalGastos + totalPagoTrabajadores;
+      Number(totalGastos || 0) + Number(totalPagoTrabajadores || 0);
 
     const utilidadNeta =
-      totalVentas - totalGastosConTrabajadores;
+      Number(totalVentas || 0) - Number(totalGastosConTrabajadores || 0);
 
     res.status(200).json({
       negocio,
@@ -76,16 +106,18 @@ const getBusinessSummary = async (req, res) => {
         // Gastos operativos manuales.
         totalGastos,
 
-        // Pagos reales a trabajadores desde liquidaciones abonadas o pagadas.
+        // Pagos reales a trabajadores desde liquidaciones activas.
         totalPagoTrabajadores,
         totalAbonado,
         totalPendiente,
 
-        // Total visual/contable para mostrar "gastos del negocio".
+        // Total contable usado para utilidad.
         totalGastosConTrabajadores,
 
+        // Producción que todavía no está en una liquidación activa.
         totalKilosSinLiquidar,
         totalPagoSinLiquidar,
+
         utilidadNeta,
       },
     });

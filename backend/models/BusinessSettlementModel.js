@@ -2,6 +2,43 @@
 
 const mongoose = require("mongoose");
 
+const PaymentSchema = new mongoose.Schema(
+  {
+    monto: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+
+    fecha: {
+      type: Date,
+      default: Date.now,
+    },
+
+    observacion: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    medio_pago: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    registrado_por: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
 const BusinessSettlementSchema = new mongoose.Schema(
   {
     usuario_id: {
@@ -49,26 +86,31 @@ const BusinessSettlementSchema = new mongoose.Schema(
     total_kilos: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     precio_kilo_promedio: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     total_pago: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     abonado: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     pendiente: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     estado: {
@@ -77,9 +119,22 @@ const BusinessSettlementSchema = new mongoose.Schema(
       default: "pendiente",
     },
 
+    /*
+    ==========================================
+    HISTORIAL DE PAGOS
+    ==========================================
+    */
+    pagos: [PaymentSchema],
+
+    /*
+    ==========================================
+    ANULACIÓN CONTABLE
+    ==========================================
+    */
     anulada: {
       type: Boolean,
       default: false,
+      index: true,
     },
 
     fecha_anulacion: {
@@ -90,13 +145,20 @@ const BusinessSettlementSchema = new mongoose.Schema(
     motivo_anulacion: {
       type: String,
       default: "",
+      trim: true,
     },
 
     anulada_por: {
       type: String,
       default: "",
+      trim: true,
     },
 
+    /*
+    ==========================================
+    PRODUCCIONES ASOCIADAS
+    ==========================================
+    */
     producciones: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -116,21 +178,66 @@ const BusinessSettlementSchema = new mongoose.Schema(
   }
 );
 
+/*
+==========================================
+RECALCULAR AUTOMÁTICAMENTE
+==========================================
+*/
+
 BusinessSettlementSchema.pre("save", function (next) {
+  const totalPago = Number(this.total_pago || 0);
+
+  const abonado = Math.min(
+    Number(this.abonado || 0),
+    totalPago
+  );
+
+  this.abonado = abonado;
+
   this.pendiente = Math.max(
-    Number(this.total_pago || 0) - Number(this.abonado || 0),
+    totalPago - abonado,
     0
   );
 
-  if (Number(this.abonado || 0) <= 0) {
+  /*
+    Si está anulada,
+    mantenemos el último estado registrado.
+    No alteramos el historial.
+  */
+  if (this.anulada) {
+    return next();
+  }
+
+  if (abonado <= 0) {
     this.estado = "pendiente";
-  } else if (Number(this.abonado || 0) < Number(this.total_pago || 0)) {
+  } else if (abonado < totalPago) {
     this.estado = "abonado";
   } else {
     this.estado = "pagado";
   }
 
   next();
+});
+
+/*
+==========================================
+ÍNDICES
+==========================================
+*/
+
+BusinessSettlementSchema.index({
+  usuario_id: 1,
+  negocio_id: 1,
+});
+
+BusinessSettlementSchema.index({
+  negocio_id: 1,
+  trabajador_id: 1,
+});
+
+BusinessSettlementSchema.index({
+  negocio_id: 1,
+  fecha_inicio: -1,
 });
 
 module.exports = mongoose.model(

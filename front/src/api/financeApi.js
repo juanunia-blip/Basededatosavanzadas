@@ -412,12 +412,20 @@ export const createBusinessSettlement = async (businessId, data) => {
 export const addBusinessSettlementPayment = async (
   businessId,
   settlementId,
-  monto
+  payload
 ) => {
+  const body =
+    typeof payload === "object"
+      ? payload
+      : {
+          monto: payload,
+        };
+
   const response = await api.patch(
     `/businesses/${businessId}/settlements/${settlementId}/payment`,
-    { monto }
+    body
   );
+
   return response.data;
 };
 
